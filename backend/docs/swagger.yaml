@@ -1,0 +1,59 @@
+basePath: /api/v1
+definitions:
+  services.UploadFileResult:
+    properties:
+      filename:
+        type: string
+      key:
+        type: string
+      url:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is a sample API server for Bedrock RAG.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Bedrock RAG Sample API
+  version: "1.0"
+paths:
+  /api/v1/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 指定されたファイルをS3にアップロードします。
+      parameters:
+      - description: アップロードするファイル (最大20MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: アップロード成功。S3のキーとURLを含む
+          schema:
+            $ref: '#/definitions/services.UploadFileResult'
+        "400":
+          description: リクエスト不正 (ファイルなし、サイズ超過など)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: サーバー内部エラー (アップロード失敗)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: ファイルアップロード
+      tags:
+      - Upload
+swagger: "2.0"
