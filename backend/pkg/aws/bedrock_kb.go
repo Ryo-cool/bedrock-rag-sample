@@ -228,7 +228,7 @@ func (b *BedrockKBClient) RAGQueryWithRetrieveAndGenerate(ctx context.Context, q
 
 	resp, err := b.agentRuntimeClient.RetrieveAndGenerate(ctx, input)
 	if err != nil {
-		return "", fmt.Errorf("RetrieveAndGenerateの呼び出しに失敗しました: %w", err)
+		return "", fmt.Errorf("retrieveAndGenerateの呼び出しに失敗しました: %w", err)
 	}
 
 	if resp.Output == nil || resp.Output.Text == nil {

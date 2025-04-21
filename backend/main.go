@@ -1,19 +1,89 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
 	"bedrock-rag-sample/backend/api/handlers"
+	apiModels "bedrock-rag-sample/backend/api/models"
 	"bedrock-rag-sample/backend/api/routes"
 	"bedrock-rag-sample/backend/config"
-	"bedrock-rag-sample/backend/internal/models"
+	internalModels "bedrock-rag-sample/backend/internal/models"
 	"bedrock-rag-sample/backend/internal/services"
 	"bedrock-rag-sample/backend/pkg/aws"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
+
+// customHTTPErrorHandler はEchoのカスタムエラーハンドラー
+func customHTTPErrorHandler(err error, c echo.Context) {
+	if c.Response().Committed {
+		return // レスポンスが既にコミットされている場合は何もしない
+	}
+
+	var (
+		statusCode = http.StatusInternalServerError
+		errorCode  = "INTERNAL_SERVER_ERROR"
+		message    = "内部サーバーエラーが発生しました"
+		details    = ""
+	)
+
+	var httpError *echo.HTTPError
+	if errors.As(err, &httpError) {
+		statusCode = httpError.Code
+		// httpError.Messageがstringの場合のみメッセージとして使用
+		if msg, ok := httpError.Message.(string); ok {
+			message = msg
+		} else {
+			// それ以外（JSONなど）の場合はステータスコードに基づいた汎用メッセージ
+			message = http.StatusText(statusCode)
+			if message == "" {
+				message = fmt.Sprintf("HTTPエラー %d", statusCode)
+			}
+		}
+		// エラーコードもステータスコードから推測
+		switch statusCode {
+		case http.StatusBadRequest:
+			errorCode = "BAD_REQUEST"
+		case http.StatusUnauthorized:
+			errorCode = "UNAUTHORIZED"
+		case http.StatusForbidden:
+			errorCode = "FORBIDDEN"
+		case http.StatusNotFound:
+			errorCode = "NOT_FOUND"
+			// 他のステータスコードに対応するエラーコードを追加可能
+		}
+
+		if httpError.Internal != nil {
+			details = httpError.Internal.Error()
+		}
+
+	} else {
+		// echo.HTTPError以外のエラーは内部サーバーエラーとして扱う
+		// 元のエラーメッセージはログに出力し、レスポンスには含めない（本番環境を想定）
+		c.Logger().Error(err)
+		// 開発中はdetailsにエラーメッセージを含めることも可能
+		// details = err.Error()
+	}
+
+	errorResponse := apiModels.ErrorResponse{
+		Error: apiModels.ErrorDetail{
+			Code:    errorCode,
+			Message: message,
+			Details: details, // detailsは開発時のみ含める等の制御も可能
+		},
+	}
+
+	// Send response
+	if !c.Response().Committed {
+		if err := c.JSON(statusCode, errorResponse); err != nil {
+			c.Logger().Error("カスタムエラーハンドラーでのJSON送信エラー:", err)
+		}
+	}
+}
 
 func main() {
 	// 設定を読み込む
@@ -38,7 +108,7 @@ func main() {
 	}
 
 	// データベースハンドラーを初期化
-	dbHandler, err := models.NewDBHandler(cfg)
+	dbHandler, err := internalModels.NewDBHandler(cfg)
 	if err != nil {
 		log.Printf("警告: データベース接続に失敗しました: %v", err)
 		log.Printf("レコメンド機能は利用できません")
@@ -88,6 +158,9 @@ func main() {
 
 	// Echo instance
 	e := echo.New()
+
+	// カスタムエラーハンドラーを設定
+	e.HTTPErrorHandler = customHTTPErrorHandler
 
 	// Middleware
 	e.Use(middleware.Logger())

@@ -78,18 +78,37 @@ func (t *TextractClient) ExtractTextFromDocument(ctx context.Context, file *mult
 
 // extractTextFromS3 はS3上のドキュメントからテキストを抽出する
 func (t *TextractClient) extractTextFromS3(ctx context.Context, s3Key string) (string, int, error) {
-	// Textractが認識するS3パスを作成
-	input := &textract.DetectDocumentTextInput{
-		Document: &types.Document{
+	// Textractが認識するS3パスを作成 (このinput変数は非同期処理では不要)
+	/*
+		input := &textract.DetectDocumentTextInput{
+			Document: &types.Document{
+				S3Object: &types.S3Object{
+					Bucket: aws.String(t.bucketName),
+					Name:   aws.String(s3Key),
+				},
+			},
+		}
+	*/
+
+	// Textractにテキスト検出ジョブを送信
+	startResp, err := t.client.StartDocumentTextDetection(ctx, &textract.StartDocumentTextDetectionInput{
+		DocumentLocation: &types.DocumentLocation{
 			S3Object: &types.S3Object{
 				Bucket: aws.String(t.bucketName),
 				Name:   aws.String(s3Key),
 			},
 		},
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("textract検出に失敗しました: %w", err)
 	}
 
+	jobId := startResp.JobId
+
 	// テキスト検出を実行
-	output, err := t.client.DetectDocumentText(ctx, input)
+	output, err := t.client.GetDocumentTextDetection(ctx, &textract.GetDocumentTextDetectionInput{
+		JobId: jobId,
+	})
 	if err != nil {
 		return "", 0, fmt.Errorf("textract検出に失敗しました: %w", err)
 	}

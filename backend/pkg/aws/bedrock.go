@@ -88,7 +88,7 @@ func (b *BedrockClient) GenerateText(ctx context.Context, prompt string) (string
 		return "", fmt.Errorf("入力JSONの作成に失敗しました: %w", err)
 	}
 
-	// Bedrockにリクエスト
+	// bedrockにリクエスト
 	response, err := b.client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(b.modelID),
 		Body:        inputBytes,
@@ -127,7 +127,7 @@ func (b *BedrockClient) GenerateEmbedding(ctx context.Context, text string) ([]f
 		return nil, fmt.Errorf("入力JSONの作成に失敗しました: %w", err)
 	}
 
-	// Bedrockにリクエスト
+	// bedrockにリクエスト
 	response, err := b.client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(embeddingModelID),
 		Body:        inputBytes,
