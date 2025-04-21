@@ -26,9 +26,10 @@ func NewSummarizeService(bedrockClient *aws.BedrockClient, uploadService *Upload
 
 // SummarizeResult は要約結果を表す構造体
 type SummarizeResult struct {
-	Summary    string            `json:"summary"`
-	SourceText string            `json:"source_text,omitempty"`
-	UploadInfo *UploadFileResult `json:"upload_info,omitempty"`
+	OriginalText string            `json:"original_text,omitempty"`
+	Summary      string            `json:"summary"`
+	SourceText   string            `json:"source_text,omitempty"`
+	UploadInfo   *UploadFileResult `json:"upload_info,omitempty"`
 }
 
 // SummarizeText はテキストを要約する
@@ -94,4 +95,21 @@ func (s *SummarizeService) SummarizeFile(ctx context.Context, file *multipart.Fi
 		SourceText: text,
 		UploadInfo: uploadResult,
 	}, nil
+}
+
+// SummarizeFileByS3Key はS3キーで指定されたファイルを要約する (新規追加)
+func (s *SummarizeService) SummarizeFileByS3Key(ctx context.Context, s3Key string) (*SummarizeResult, error) {
+	// S3からファイルをダウンロード
+	fileContent, err := s.uploadService.s3Client.DownloadFileContent(ctx, s3Key)
+	if err != nil {
+		return nil, fmt.Errorf("S3からのファイルダウンロードに失敗しました (key: %s): %w", s3Key, err)
+	}
+
+	// テキストを要約
+	summary, err := s.bedrockClient.GenerateSummary(ctx, string(fileContent))
+	if err != nil {
+		return nil, fmt.Errorf("Bedrockでのファイル要約に失敗しました (key: %s): %w", s3Key, err)
+	}
+
+	return &SummarizeResult{Summary: summary}, nil // OriginalTextは含めない（任意）
 }

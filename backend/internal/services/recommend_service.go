@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"strings"
 
-	"bedrock-rag-sample/backend/internal/models"
+	"bedrock-rag-sample/backend/internal/domain"
 	"bedrock-rag-sample/backend/pkg/aws"
 )
 
 // RecommendService はテキスト類似度に基づく推薦を行うサービス
 type RecommendService struct {
 	bedrockClient *aws.BedrockClient
-	dbHandler     *models.DBHandler
+	dbHandler     *domain.DBHandler
 }
 
 // NewRecommendService は新しいRecommendServiceを作成する
-func NewRecommendService(bedrockClient *aws.BedrockClient, dbHandler *models.DBHandler) *RecommendService {
+func NewRecommendService(bedrockClient *aws.BedrockClient, dbHandler *domain.DBHandler) *RecommendService {
 	return &RecommendService{
 		bedrockClient: bedrockClient,
 		dbHandler:     dbHandler,
@@ -32,12 +32,12 @@ const MaxChunks = 20
 // RecommendResult は推薦結果を表す構造体
 type RecommendResult struct {
 	Query             string                     `json:"query"`
-	RecommendedChunks []models.DocumentChunk     `json:"recommended_chunks"`
-	Documents         map[int64]*models.Document `json:"documents,omitempty"`
+	RecommendedChunks []domain.DocumentChunk     `json:"recommended_chunks"`
+	Documents         map[int64]*domain.Document `json:"documents,omitempty"`
 }
 
 // ProcessDocumentForEmbedding はドキュメントをチャンクに分割し、Embeddingを生成する
-func (s *RecommendService) ProcessDocumentForEmbedding(ctx context.Context, doc *models.Document) error {
+func (s *RecommendService) ProcessDocumentForEmbedding(ctx context.Context, doc *domain.Document) error {
 	// ドキュメントをチャンクに分割
 	chunks := s.splitIntoChunks(doc.Content)
 
@@ -81,7 +81,7 @@ func (s *RecommendService) FindSimilarDocuments(ctx context.Context, query strin
 	result := &RecommendResult{
 		Query:             query,
 		RecommendedChunks: chunks,
-		Documents:         make(map[int64]*models.Document),
+		Documents:         make(map[int64]*domain.Document),
 	}
 
 	// ドキュメント情報を取得 (重複を除く)

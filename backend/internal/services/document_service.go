@@ -72,3 +72,45 @@ func (s *DocumentService) ProcessDocument(ctx context.Context, file *multipart.F
 
 	return result, nil
 }
+
+// ProcessDocumentByS3Key はS3キーで指定されたドキュメントを処理する (新規追加)
+func (s *DocumentService) ProcessDocumentByS3Key(ctx context.Context, s3Key string) (*DocumentProcessResult, error) {
+	// ファイル拡張子を確認
+	ext := strings.ToLower(filepath.Ext(s3Key))
+	// filename := filepath.Base(s3Key) // 不要なので削除
+
+	// サポートされる形式を確認
+	if ext != ".pdf" && ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".tiff" {
+		return nil, fmt.Errorf("サポートされていないファイル形式です: %s", ext)
+	}
+
+	// Textractを使用してテキスト抽出 (S3キー版を呼び出す)
+	extractResult, err := s.textractClient.ExtractTextFromS3Key(ctx, s3Key) // ExtractTextFromS3Document -> ExtractTextFromS3Key に修正
+	if err != nil {
+		return nil, fmt.Errorf("テキスト抽出に失敗しました (key: %s): %w", s3Key, err)
+	}
+
+	// 抽出されたテキストが空でないか確認
+	if extractResult.Text == "" {
+		return nil, fmt.Errorf("ドキュメントからテキストを抽出できませんでした (key: %s)", s3Key)
+	}
+
+	// 結果オブジェクトを作成
+	result := &DocumentProcessResult{
+		OriginalText: extractResult.Text,
+		DocumentInfo: *extractResult,
+		FileType:     ext[1:], // 先頭の.を削除
+	}
+
+	// テキストが十分な長さの場合は要約も生成
+	// テキストが短い場合は要約を省略
+	if len(extractResult.Text) > 200 {
+		// 要約サービスを使用してテキスト要約
+		summaryResult, err := s.summarizeService.SummarizeText(ctx, extractResult.Text)
+		if err == nil && summaryResult.Summary != "" {
+			result.Summary = summaryResult.Summary
+		}
+	}
+
+	return result, nil
+}

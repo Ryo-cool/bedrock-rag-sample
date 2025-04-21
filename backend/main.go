@@ -21,12 +21,14 @@ import (
 	"os"
 	"time"
 
-	"bedrock-rag-sample/backend/api/handlers"
-	apiModels "bedrock-rag-sample/backend/api/models"
-	"bedrock-rag-sample/backend/api/routes"
 	"bedrock-rag-sample/backend/config"
-	_ "bedrock-rag-sample/backend/docs" // docs パッケージをインポート (init()を実行するため)
-	internalModels "bedrock-rag-sample/backend/internal/models"
+	_ "bedrock-rag-sample/backend/docs"                   // docs パッケージをインポート (init()を実行するため)
+	domain "bedrock-rag-sample/backend/internal/domain"   // エイリアス domain を指定
+	"bedrock-rag-sample/backend/internal/handler"         // 修正
+	dto "bedrock-rag-sample/backend/internal/handler/dto" // エイリアス dto を指定
+	"bedrock-rag-sample/backend/internal/route"           // 修正
+
+	// 修正 (エイリアス domain)
 	"bedrock-rag-sample/backend/internal/services"
 	"bedrock-rag-sample/backend/pkg/aws"
 
@@ -112,8 +114,8 @@ func customHTTPErrorHandler(err error, c echo.Context) {
 		// details = err.Error()
 	}
 
-	errorResponse := apiModels.ErrorResponse{
-		Error: apiModels.ErrorDetail{
+	errorResponse := dto.ErrorResponse{ // apiModels -> dto に修正
+		Error: dto.ErrorDetail{ // apiModels -> dto に修正
 			Code:    errorCode,
 			Message: message,
 			// details は本番では基本返さない方針。
@@ -206,19 +208,22 @@ func main() {
 	}
 	log.Info().Msg("Textract client initialized")
 
-	// データベースハンドラーを初期化
-	dbHandler, err := internalModels.NewDBHandler(cfg)
+	// DBハンドラーを初期化
+	dbHandler, err := domain.NewDBHandler(cfg) // 元の形に戻す
 	if err != nil {
 		log.Warn().Err(err).Msg("データベース接続に失敗しました。レコメンド機能は利用できません")
-		dbHandler = nil
+		dbHandler = nil // エラーの場合は nil を設定
 	} else {
+		log.Info().Msg("DB handler initialized")
 		// プログラム終了時にDBコネクションを閉じる
 		defer func() {
-			if err := dbHandler.Close(); err != nil {
-				log.Error().Err(err).Msg("データベース接続のクローズに失敗しました")
+			if dbHandler != nil {
+				if err := dbHandler.Close(); err != nil {
+					log.Error().Err(err).Msg("Failed to close database connection")
+				}
+				log.Info().Msg("Database connection closed")
 			}
 		}()
-		log.Info().Msg("Database handler initialized")
 	}
 
 	// サービスを初期化
@@ -248,22 +253,22 @@ func main() {
 	}
 
 	// ハンドラーを初期化
-	uploadHandler := handlers.NewUploadHandler(uploadService)
-	summarizeHandler := handlers.NewSummarizeHandler(summarizeService)
-	documentHandler := handlers.NewDocumentHandler(documentService)
+	uploadHandler := handler.NewUploadHandler(uploadService)
+	summarizeHandler := handler.NewSummarizeHandler(summarizeService)
+	documentHandler := handler.NewDocumentHandler(documentService)
 	log.Info().Msg("Upload, Summarize, Document handlers initialized")
 
 	// レコメンドハンドラーの初期化
-	var recommendHandler *handlers.RecommendHandler
+	var recommendHandler *handler.RecommendHandler
 	if recommendService != nil && dbHandler != nil {
-		recommendHandler = handlers.NewRecommendHandler(recommendService, dbHandler)
+		recommendHandler = handler.NewRecommendHandler(recommendService, dbHandler)
 		log.Info().Msg("Recommend handler initialized")
 	}
 
 	// QAハンドラーの初期化（サービスが初期化できなかった場合はnilが渡される）
-	var qaHandler *handlers.QAHandler
+	var qaHandler *handler.QAHandler
 	if qaService != nil {
-		qaHandler = handlers.NewQAHandler(qaService)
+		qaHandler = handler.NewQAHandler(qaService)
 		log.Info().Msg("QA handler initialized")
 	} else {
 		log.Warn().Msg("QA handler skipped due to QA service initialization failure")
@@ -287,7 +292,7 @@ func main() {
 	log.Info().Msg("Swagger UI endpoint configured at /swagger/")
 
 	// ルートを設定
-	routes.SetupRoutes(e, uploadHandler, summarizeHandler, qaHandler, documentHandler, recommendHandler)
+	route.SetupRoutes(e, uploadHandler, summarizeHandler, qaHandler, documentHandler, recommendHandler)
 	log.Info().Msg("Routes configured")
 
 	// ヘルスチェック用のエンドポイント

@@ -1,8 +1,10 @@
 package aws
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"path/filepath"
 
@@ -83,4 +85,23 @@ func (s *S3Client) GetFileURL(ctx context.Context, key string) (string, error) {
 	}
 
 	return presignedReq.URL, nil
+}
+
+// DownloadFileContent はS3からファイルの内容をダウンロードする
+func (s *S3Client) DownloadFileContent(ctx context.Context, key string) ([]byte, error) {
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("S3からのオブジェクト取得に失敗しました (key: %s): %w", key, err)
+	}
+	defer output.Body.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err := io.Copy(buf, output.Body); err != nil {
+		return nil, fmt.Errorf("オブジェクト内容の読み込みに失敗しました (key: %s): %w", key, err)
+	}
+
+	return buf.Bytes(), nil
 }

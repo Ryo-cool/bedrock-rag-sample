@@ -559,8 +559,6 @@ var SwaggerInfo = &swag.Spec{
 	Description:      "This is a sample API server for Bedrock RAG.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
 }
 
 func init() {
