@@ -15,17 +15,14 @@ globs: ["**/*.*"] # Apply to all files initially
 
 ## Branching Strategy
 
-- Use a Gitflow-like branching strategy:
-  - `main`: Production-ready code.
-  - `develop`: Integration branch for features.
-  - `feature/<feature-name>`: For developing new features.
-  - `release/<version>`: For preparing releases.
-  - `hotfix/<issue>`: For fixing critical bugs in production.
+- Use a GitHub Flow-like branching strategy:
+  - `main`: Represents the latest releasable state. All development happens in feature branches off `main`.
+  - `feature/<feature-name>` or `<short-description>`: For developing new features or fixes. Branched from `main`.
 
 ## Pull Requests
 
-- Create Pull Requests (PRs) from feature branches to `develop`.
-- Require at least one approval before merging.
+- Create Pull Requests (PRs) from feature branches to `main`.
+- Require at least one approval before merging (recommended).
 - Ensure CI checks pass before merging.
 - Write clear PR descriptions explaining the changes and their purpose.
 
