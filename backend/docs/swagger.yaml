@@ -1,5 +1,122 @@
 basePath: /api/v1
 definitions:
+  aws.TextractResult:
+    properties:
+      document_id:
+        type: string
+      pages:
+        type: integer
+      s3_key:
+        type: string
+      text:
+        type: string
+    type: object
+  handlers.QueryRequest:
+    description: Q&A APIのリクエストボディ
+    properties:
+      query:
+        description: RAGシステムへの質問
+        example: BedrockのKnowledge Baseについて教えてください。
+        type: string
+    required:
+    - query
+    type: object
+  handlers.RecommendRequest:
+    description: 類似ドキュメント検索APIのリクエストボディ
+    properties:
+      limit:
+        description: 取得するドキュメントの最大数 (デフォルト5, 最大20)
+        example: 5
+        type: integer
+      query:
+        description: 検索クエリ
+        example: Bedrockについて
+        type: string
+    required:
+    - query
+    type: object
+  handlers.TextRequest:
+    description: テキスト要約APIのリクエストボディ
+    properties:
+      text:
+        description: 要約するテキスト
+        example: これは要約するテキストです。
+        type: string
+    required:
+    - text
+    type: object
+  models.DocumentChunk:
+    properties:
+      chunk_index:
+        type: integer
+      chunk_text:
+        type: string
+      document_id:
+        type: integer
+      id:
+        type: integer
+      similarity:
+        type: number
+    type: object
+  models.ErrorDetail:
+    properties:
+      code:
+        description: 'エラーコード (例: INVALID_INPUT)'
+        type: string
+      details:
+        description: 詳細情報 (省略可能)
+        type: string
+      message:
+        description: ユーザーフレンドリーなメッセージ
+        type: string
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/models.ErrorDetail'
+    type: object
+  services.DocumentProcessResult:
+    properties:
+      document_info:
+        $ref: '#/definitions/aws.TextractResult'
+      file_type:
+        type: string
+      original_text:
+        type: string
+      summary:
+        type: string
+    type: object
+  services.QAResult:
+    properties:
+      answer:
+        type: string
+      query:
+        type: string
+      retrieved_documents:
+        items:
+          $ref: '#/definitions/services.RetrievedDocument'
+        type: array
+    type: object
+  services.RetrievedDocument:
+    properties:
+      content:
+        type: string
+      document_id:
+        type: string
+      location:
+        type: string
+      score:
+        type: number
+    type: object
+  services.SummarizeResult:
+    properties:
+      source_text:
+        type: string
+      summary:
+        type: string
+      upload_info:
+        $ref: '#/definitions/services.UploadFileResult'
+    type: object
   services.UploadFileResult:
     properties:
       filename:
@@ -23,6 +140,191 @@ info:
   title: Bedrock RAG Sample API
   version: "1.0"
 paths:
+  /api/v1/document/{id}/embedding:
+    post:
+      consumes:
+      - application/json
+      description: 指定されたIDのドキュメントを取得し、Embeddingを生成・保存します。
+      parameters:
+      - description: 処理対象ドキュメントのID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 処理成功メッセージ
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: リクエスト不正 (無効なIDなど)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: ドキュメントが見つからない
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (処理失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: ドキュメントEmbedding処理
+      tags:
+      - Recommend
+  /api/v1/document/process:
+    post:
+      consumes:
+      - multipart/form-data
+      description: アップロードされたドキュメントからTextractでテキストを抽出し、その内容を要約します。
+      parameters:
+      - description: 処理するドキュメント (PDF/画像, 最大15MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ドキュメント処理成功
+          schema:
+            $ref: '#/definitions/services.DocumentProcessResult'
+        "400":
+          description: リクエスト不正 (ファイルなし、サイズ超過、サポート外形式など)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (処理失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: ドキュメント処理 (Textract + 要約)
+      tags:
+      - Document
+  /api/v1/qa:
+    post:
+      consumes:
+      - application/json
+      description: Knowledge Baseを使用して質問に回答します。
+      parameters:
+      - description: 質問を含むリクエストボディ
+        in: body
+        name: query
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.QueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 回答生成成功
+          schema:
+            $ref: '#/definitions/services.QAResult'
+        "400":
+          description: リクエスト不正 (質問が空など)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (回答生成失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: RAG Q&A
+      tags:
+      - QA
+  /api/v1/recommend:
+    post:
+      consumes:
+      - application/json
+      description: 指定されたクエリにベクトル検索で類似するドキュメントを検索します。
+      parameters:
+      - description: 検索クエリと取得件数
+        in: body
+        name: query
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RecommendRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 類似ドキュメントチャンクの配列
+          schema:
+            items:
+              $ref: '#/definitions/models.DocumentChunk'
+            type: array
+        "400":
+          description: リクエスト不正 (クエリが空など)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (検索失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: 類似ドキュメント検索
+      tags:
+      - Recommend
+  /api/v1/summarize/file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: アップロードされたファイル (PDF, 画像) の内容を要約します。
+      parameters:
+      - description: 要約するファイル (PDF/画像, 最大5MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 要約成功
+          schema:
+            $ref: '#/definitions/services.SummarizeResult'
+        "400":
+          description: リクエスト不正 (ファイルなし、サイズ超過など)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (要約失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: ファイル要約
+      tags:
+      - Summarize
+  /api/v1/summarize/text:
+    post:
+      consumes:
+      - application/json
+      description: 指定されたテキストを要約します。
+      parameters:
+      - description: 要約するテキストを含むリクエストボディ
+        in: body
+        name: text
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TextRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 要約成功
+          schema:
+            $ref: '#/definitions/services.SummarizeResult'
+        "400":
+          description: リクエスト不正 (テキストが空など)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: サーバー内部エラー (要約失敗)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: テキスト要約
+      tags:
+      - Summarize
   /api/v1/upload:
     post:
       consumes:
