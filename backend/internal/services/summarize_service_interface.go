@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"mime/multipart"
+	"io"
 )
 
 // SummarizeServiceInterface は要約サービスのインターフェース
 type SummarizeServiceInterface interface {
 	SummarizeText(ctx context.Context, text string) (*SummarizeResult, error)
-	SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error)
+	SummarizeFile(ctx context.Context, fileContent io.Reader, fileName string) (*SummarizeResult, error)
 	SummarizeFileByS3Key(ctx context.Context, s3Key string) (*SummarizeResult, error)
 	// 他の SummarizeService メソッドが必要であればここに追加
 }

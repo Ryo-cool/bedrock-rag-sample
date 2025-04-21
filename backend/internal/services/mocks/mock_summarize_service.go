@@ -7,7 +7,7 @@ package mocks
 import (
 	services "bedrock-rag-sample/backend/internal/services"
 	context "context"
-	multipart "mime/multipart"
+	io "io"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -37,18 +37,18 @@ func (m *MockSummarizeServiceInterface) EXPECT() *MockSummarizeServiceInterfaceM
 }
 
 // SummarizeFile mocks base method.
-func (m *MockSummarizeServiceInterface) SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*services.SummarizeResult, error) {
+func (m *MockSummarizeServiceInterface) SummarizeFile(ctx context.Context, fileContent io.Reader, fileName string) (*services.SummarizeResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SummarizeFile", ctx, file)
+	ret := m.ctrl.Call(m, "SummarizeFile", ctx, fileContent, fileName)
 	ret0, _ := ret[0].(*services.SummarizeResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SummarizeFile indicates an expected call of SummarizeFile.
-func (mr *MockSummarizeServiceInterfaceMockRecorder) SummarizeFile(ctx, file interface{}) *gomock.Call {
+func (mr *MockSummarizeServiceInterfaceMockRecorder) SummarizeFile(ctx, fileContent, fileName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SummarizeFile", reflect.TypeOf((*MockSummarizeServiceInterface)(nil).SummarizeFile), ctx, file)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SummarizeFile", reflect.TypeOf((*MockSummarizeServiceInterface)(nil).SummarizeFile), ctx, fileContent, fileName)
 }
 
 // SummarizeFileByS3Key mocks base method.

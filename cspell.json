@@ -30,6 +30,7 @@
     "pgvector",
     "pmezard",
     "purell",
+    "repositorymocks",
     "servicemock",
     "servicemocks",
     "spew",

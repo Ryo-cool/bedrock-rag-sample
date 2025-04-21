@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 
 	"bedrock-rag-sample/backend/pkg/aws"
 )
@@ -55,29 +54,33 @@ func (s *SummarizeService) SummarizeText(ctx context.Context, text string) (*Sum
 	}, nil
 }
 
-// SummarizeFile はアップロードされたファイルから情報を抽出し、要約する
-// 注: 現在はシンプルなテキストファイルのみをサポート (PDF/画像はTextractが必要)
-func (s *SummarizeService) SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error) {
-	// まずファイルをアップロード
-	uploadResult, err := s.uploadService.UploadFile(ctx, file)
-	if err != nil {
-		return nil, fmt.Errorf("ファイルのアップロードに失敗しました: %w", err)
-	}
+// SummarizeFile は io.Reader から内容を読み込み、要約する
+// 引数: fileContent (ファイル内容), fileName (拡張子判定用)
+func (s *SummarizeService) SummarizeFile(ctx context.Context, fileContent io.Reader, fileName string) (*SummarizeResult, error) {
+	// // まずファイルをアップロード // Upload 処理を削除
+	// uploadResult, err := s.uploadService.UploadFile(ctx, file)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("ファイルのアップロードに失敗しました: %w", err)
+	// }
 
-	// ファイルからテキストを抽出 (現在はシンプルな方法で)
-	src, err := file.Open()
-	if err != nil {
-		return nil, fmt.Errorf("ファイルのオープンに失敗しました: %w", err)
-	}
-	defer src.Close()
+	// // ファイルからテキストを抽出 (現在はシンプルな方法で) // fileHeader からの読み込みを削除
+	// src, err := file.Open()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("ファイルのオープンに失敗しました: %w", err)
+	// }
+	// defer src.Close()
 
-	// ファイルの内容を読み込む (テキストファイルと仮定)
-	content, err := io.ReadAll(src)
+	// ファイルの内容を読み込む (引数の Reader から読み込む)
+	contentBytes, err := io.ReadAll(fileContent) // fileContent を直接読む
 	if err != nil {
-		return nil, fmt.Errorf("ファイルの読み込みに失敗しました: %w", err)
+		return nil, fmt.Errorf("ファイル内容の読み込みに失敗しました: %w", err)
 	}
+	text := string(contentBytes)
 
-	text := string(content)
+	// テキストが空かチェック (追加)
+	if text == "" {
+		return nil, errors.New("ファイルの内容が空です")
+	}
 
 	// テキストの長さを制限
 	if len(text) > 10000 {
@@ -93,7 +96,8 @@ func (s *SummarizeService) SummarizeFile(ctx context.Context, file *multipart.Fi
 	return &SummarizeResult{
 		Summary:    summary,
 		SourceText: text,
-		UploadInfo: uploadResult,
+		// UploadInfo は削除 (このメソッドはアップロードしなくなったため)
+		// UploadInfo: uploadResult,
 	}, nil
 }
 
