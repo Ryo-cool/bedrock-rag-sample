@@ -13,11 +13,11 @@ import (
 // SummarizeService はテキスト要約処理を行うサービス
 type SummarizeService struct {
 	bedrockClient aws.BedrockClientInterface
-	uploadService *UploadService
+	uploadService UploadServiceInterface
 }
 
 // NewSummarizeService は新しいSummarizeServiceを作成する
-func NewSummarizeService(bedrockClient *aws.BedrockClient, uploadService *UploadService) *SummarizeService {
+func NewSummarizeService(bedrockClient aws.BedrockClientInterface, uploadService UploadServiceInterface) *SummarizeService {
 	return &SummarizeService{
 		bedrockClient: bedrockClient,
 		uploadService: uploadService,
@@ -99,8 +99,15 @@ func (s *SummarizeService) SummarizeFile(ctx context.Context, file *multipart.Fi
 
 // SummarizeFileByS3Key はS3キーで指定されたファイルを要約する (新規追加)
 func (s *SummarizeService) SummarizeFileByS3Key(ctx context.Context, s3Key string) (*SummarizeResult, error) {
+	// uploadService から S3 クライアントを取得
+	s3Client := s.uploadService.GetS3Client()
+	if s3Client == nil {
+		// S3 クライアントが取得できない場合のエラーハンドリング (例)
+		return nil, errors.New("S3 client is not available through upload service")
+	}
+
 	// S3からファイルをダウンロード
-	fileContent, err := s.uploadService.s3Client.DownloadFileContent(ctx, s3Key)
+	fileContent, err := s3Client.DownloadFileContent(ctx, s3Key)
 	if err != nil {
 		return nil, fmt.Errorf("S3からのファイルダウンロードに失敗しました (key: %s): %w", s3Key, err)
 	}

@@ -11,12 +11,12 @@ import (
 
 // RecommendService はテキスト類似度に基づく推薦を行うサービス
 type RecommendService struct {
-	bedrockClient *aws.BedrockClient
-	dbHandler     *domain.DBHandler
+	bedrockClient aws.BedrockClientInterface
+	dbHandler     domain.DBHandlerInterface
 }
 
 // NewRecommendService は新しいRecommendServiceを作成する
-func NewRecommendService(bedrockClient *aws.BedrockClient, dbHandler *domain.DBHandler) *RecommendService {
+func NewRecommendService(bedrockClient aws.BedrockClientInterface, dbHandler domain.DBHandlerInterface) *RecommendService {
 	return &RecommendService{
 		bedrockClient: bedrockClient,
 		dbHandler:     dbHandler,

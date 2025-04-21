@@ -15,7 +15,7 @@ type UploadService struct {
 }
 
 // NewUploadService は新しいUploadServiceを作成する
-func NewUploadService(s3Client *aws.S3Client) *UploadService {
+func NewUploadService(s3Client aws.S3ClientInterface) *UploadService {
 	return &UploadService{
 		s3Client: s3Client,
 	}
@@ -62,4 +62,9 @@ func (s *UploadService) UploadFile(ctx context.Context, file *multipart.FileHead
 		Filename: file.Filename,
 		URL:      url,
 	}, nil
+}
+
+// GetS3Client は内部の S3 クライアントインターフェースを返す
+func (s *UploadService) GetS3Client() aws.S3ClientInterface {
+	return s.s3Client
 }
