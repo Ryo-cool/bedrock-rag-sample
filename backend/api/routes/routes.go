@@ -7,7 +7,7 @@ import (
 )
 
 // SetupRoutes はAPIルートを設定する
-func SetupRoutes(e *echo.Echo, uploadHandler *handlers.UploadHandler, summarizeHandler *handlers.SummarizeHandler, qaHandler *handlers.QAHandler) {
+func SetupRoutes(e *echo.Echo, uploadHandler *handlers.UploadHandler, summarizeHandler *handlers.SummarizeHandler, qaHandler *handlers.QAHandler, documentHandler *handlers.DocumentHandler, recommendHandler *handlers.RecommendHandler) {
 	// API v1 グループ
 	v1 := e.Group("/api/v1")
 
@@ -20,4 +20,11 @@ func SetupRoutes(e *echo.Echo, uploadHandler *handlers.UploadHandler, summarizeH
 
 	// QAエンドポイント
 	v1.POST("/qa", qaHandler.AskQuestion)
+
+	// ドキュメント処理エンドポイント
+	v1.POST("/document/process", documentHandler.ProcessDocument)
+
+	// レコメンドエンドポイント
+	v1.POST("/recommend", recommendHandler.FindSimilarDocuments)
+	v1.POST("/document/:id/embedding", recommendHandler.ProcessDocumentForEmbedding)
 }

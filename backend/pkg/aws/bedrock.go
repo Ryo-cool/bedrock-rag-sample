@@ -50,6 +50,16 @@ type ClaudeOutput struct {
 	Completion string `json:"completion"`
 }
 
+// TitanEmbeddingInput はAmazon Titan Embeddingモデルへの入力形式
+type TitanEmbeddingInput struct {
+	InputText string `json:"inputText"`
+}
+
+// TitanEmbeddingOutput はAmazon Titan Embeddingモデルからの出力形式
+type TitanEmbeddingOutput struct {
+	Embedding []float32 `json:"embedding"`
+}
+
 // GenerateSummary はテキストの要約を生成する
 func (b *BedrockClient) GenerateSummary(ctx context.Context, text string) (string, error) {
 	// 入力プロンプトの作成
@@ -86,7 +96,7 @@ func (b *BedrockClient) GenerateText(ctx context.Context, prompt string) (string
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("Bedrockの呼び出しに失敗しました: %w", err)
+		return "", fmt.Errorf("bedrockの呼び出しに失敗しました: %w", err)
 	}
 
 	// レスポンスの解析
@@ -99,4 +109,40 @@ func (b *BedrockClient) GenerateText(ctx context.Context, prompt string) (string
 	result := strings.TrimSpace(output.Completion)
 
 	return result, nil
+}
+
+// GenerateEmbedding はテキストからEmbeddingを生成する
+func (b *BedrockClient) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	// Titan Embeddingモデル ID
+	embeddingModelID := "amazon.titan-embed-text-v1"
+
+	// 入力を準備
+	input := TitanEmbeddingInput{
+		InputText: text,
+	}
+
+	// リクエストボディの作成
+	inputBytes, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("入力JSONの作成に失敗しました: %w", err)
+	}
+
+	// Bedrockにリクエスト
+	response, err := b.client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+		ModelId:     aws.String(embeddingModelID),
+		Body:        inputBytes,
+		ContentType: aws.String("application/json"),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("bedrock Embeddingの呼び出しに失敗しました: %w", err)
+	}
+
+	// レスポンスの解析
+	var output TitanEmbeddingOutput
+	if err := json.Unmarshal(response.Body, &output); err != nil {
+		return nil, fmt.Errorf("レスポンスの解析に失敗しました: %w", err)
+	}
+
+	return output.Embedding, nil
 }

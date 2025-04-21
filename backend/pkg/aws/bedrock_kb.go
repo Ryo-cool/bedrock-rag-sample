@@ -12,16 +12,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagent"
-	"github.com/aws/aws-sdk-go-v2/service/bedrockagent/types"
+
+	// bedrockagenttypes "github.com/aws/aws-sdk-go-v2/service/bedrockagent/types" // 不要なインポートをコメントアウト
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockagentruntime/types" // runtimeの型のみ使用
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 )
 
 // BedrockKBClient はBedrock Knowledge Base機能を扱うクライアント
 type BedrockKBClient struct {
-	agentClient   *bedrockagent.Client
-	runtimeClient *bedrockruntime.Client
-	region        string
-	kbId          string // Knowledge Base ID
+	agentClient        *bedrockagent.Client
+	runtimeClient      *bedrockruntime.Client
+	agentRuntimeClient *bedrockagentruntime.Client
+	region             string
+	kbId               string // Knowledge Base ID
+	modelId            string // 使用するモデルID
 }
 
 // NewBedrockKBClient は新しいBedrockKBClientを作成する
@@ -33,6 +38,7 @@ func NewBedrockKBClient(cfg *config.Config) (*BedrockKBClient, error) {
 
 	agentClient := bedrockagent.NewFromConfig(awsCfg)
 	runtimeClient := bedrockruntime.NewFromConfig(awsCfg)
+	agentRuntimeClient := bedrockagentruntime.NewFromConfig(awsCfg)
 
 	// 環境変数からKnowledge Base IDを取得
 	kbId := os.Getenv("BEDROCK_KB_ID")
@@ -40,11 +46,16 @@ func NewBedrockKBClient(cfg *config.Config) (*BedrockKBClient, error) {
 		return nil, fmt.Errorf("BEDROCK_KB_IDが設定されていません")
 	}
 
+	// デフォルトでClaude 3 Haikuを使用
+	modelId := getEnvOrDefault("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+
 	return &BedrockKBClient{
-		agentClient:   agentClient,
-		runtimeClient: runtimeClient,
-		region:        cfg.AWS.Region,
-		kbId:          kbId,
+		agentClient:        agentClient,
+		runtimeClient:      runtimeClient,
+		agentRuntimeClient: agentRuntimeClient,
+		region:             cfg.AWS.Region,
+		kbId:               kbId,
+		modelId:            modelId,
 	}, nil
 }
 
@@ -56,6 +67,11 @@ type ClaudeRAGInput struct {
 	TopP              float64 `json:"top_p"`
 	TopK              int     `json:"top_k"`
 }
+
+// ClaudeOutput はClaude出力形式
+// type ClaudeOutput struct {
+// 	Completion string `json:"completion"`
+// }
 
 // RAGRetrieveResult はRetrieveオペレーションの結果
 type RAGRetrieveResult struct {
@@ -69,23 +85,26 @@ type RetrievedReference struct {
 	Location   string  `json:"location"`
 	Metadata   string  `json:"metadata"`
 	Score      float64 `json:"score"`
-	DocumentId string  `json:"document_id"`
+	DocumentId string  `json:"document_id"` // Retrieve APIのレスポンスに直接IDが含まれない場合がある
 }
 
 // RetrieveFromKB はKnowledge Baseからクエリに関連するドキュメントを検索する
 func (b *BedrockKBClient) RetrieveFromKB(ctx context.Context, query string) (*RAGRetrieveResult, error) {
-	// Retrieve APIを呼び出す
-	resp, err := b.agentClient.RetrieveAndGenerate(ctx, &bedrockagent.RetrieveAndGenerateInput{
-		Input: &types.RetrieveAndGenerateInput{
-			RetrieveInput: &types.RetrieveInput{
-				KnowledgeBaseId: aws.String(b.kbId),
-				Text:            aws.String(query),
+	// agentRuntime.Retrieve APIを呼び出す
+	resp, err := b.agentRuntimeClient.Retrieve(ctx, &bedrockagentruntime.RetrieveInput{
+		KnowledgeBaseId: aws.String(b.kbId),
+		RetrievalQuery: &types.KnowledgeBaseQuery{ // ← types.RetrievalQuery → types.KnowledgeBaseQuery
+			Text: aws.String(query),
+		},
+		RetrievalConfiguration: &types.KnowledgeBaseRetrievalConfiguration{
+			VectorSearchConfiguration: &types.KnowledgeBaseVectorSearchConfiguration{
+				NumberOfResults: aws.Int32(5),
 			},
 		},
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("Knowledge Baseからの情報取得に失敗しました: %w", err)
+		return nil, fmt.Errorf("knowledge Baseからの情報取得に失敗しました: %w", err)
 	}
 
 	result := &RAGRetrieveResult{
@@ -94,31 +113,32 @@ func (b *BedrockKBClient) RetrieveFromKB(ctx context.Context, query string) (*RA
 	}
 
 	// 検索結果をマッピング
-	if resp.Output != nil && resp.Output.RetrieveResults != nil {
-		for _, item := range resp.Output.RetrieveResults.RetrievalResults {
-			if item.Content == nil || item.Content.Text == nil {
-				continue
-			}
+	for _, item := range resp.RetrievalResults {
+		if item.Content == nil || item.Content.Text == nil {
+			continue
+		}
 
-			ref := RetrievedReference{
-				Content: *item.Content.Text,
-			}
+		ref := RetrievedReference{
+			Content: *item.Content.Text,
+		}
 
-			if item.Location != nil && item.Location.Type != nil && *item.Location.Type == "S3" {
+		if item.Location != nil && item.Location.Type != "" {
+			if item.Location.Type == types.RetrievalResultLocationTypeS3 {
 				ref.Location = *item.Location.S3Location.Uri
 			}
-
-			if item.Metadata != nil {
-				metadataBytes, _ := json.Marshal(item.Metadata)
-				ref.Metadata = string(metadataBytes)
-			}
-
-			if item.DocumentId != nil {
-				ref.DocumentId = *item.DocumentId
-			}
-
-			result.RetrievedReferences = append(result.RetrievedReferences, ref)
 		}
+
+		if item.Metadata != nil {
+			metadataBytes, _ := json.Marshal(item.Metadata)
+			ref.Metadata = string(metadataBytes)
+		}
+
+		// DocumentIdは直接アクセスできない場合があるため、コメントアウトまたは別の方法で取得
+		// if item.DocumentId != nil {
+		// 	ref.DocumentId = *item.DocumentId
+		// }
+
+		result.RetrievedReferences = append(result.RetrievedReferences, ref)
 	}
 
 	return result, nil
@@ -127,7 +147,7 @@ func (b *BedrockKBClient) RetrieveFromKB(ctx context.Context, query string) (*RA
 // RAGQueryWithKB はKnowledge Baseを使用したRAGベースのクエリを実行する
 func (b *BedrockKBClient) RAGQueryWithKB(ctx context.Context, query string, references []RetrievedReference) (string, error) {
 	// Claude 3 Haiku モデルID
-	modelID := "anthropic.claude-3-haiku-20240307-v1:0"
+	modelID := b.modelId
 
 	// 参考情報をプロンプトに組み込む
 	var sb strings.Builder
@@ -166,11 +186,11 @@ func (b *BedrockKBClient) RAGQueryWithKB(ctx context.Context, query string, refe
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("Bedrockの呼び出しに失敗しました: %w", err)
+		return "", fmt.Errorf("bedrockの呼び出しに失敗しました: %w", err)
 	}
 
 	// レスポンスの解析
-	var output ClaudeOutput
+	var output ClaudeOutput // このClaudeOutputはbedrock.goで定義されている想定
 	if err := json.Unmarshal(response.Body, &output); err != nil {
 		return "", fmt.Errorf("レスポンスの解析に失敗しました: %w", err)
 	}
@@ -178,9 +198,49 @@ func (b *BedrockKBClient) RAGQueryWithKB(ctx context.Context, query string, refe
 	return strings.TrimSpace(output.Completion), nil
 }
 
+// RAGQueryWithRetrieveAndGenerate はBedrockのRetrieveAndGenerate APIを使用してKnowledge Baseに基づく回答を生成する
+func (b *BedrockKBClient) RAGQueryWithRetrieveAndGenerate(ctx context.Context, query string) (string, error) {
+	// RetrieveAndGenerate APIの呼び出し
+	input := &bedrockagentruntime.RetrieveAndGenerateInput{
+		Input: &types.RetrieveAndGenerateInput{
+			Text: aws.String(query),
+		},
+		RetrieveAndGenerateConfiguration: &types.RetrieveAndGenerateConfiguration{
+			Type: types.RetrieveAndGenerateTypeKnowledgeBase,
+			KnowledgeBaseConfiguration: &types.KnowledgeBaseRetrieveAndGenerateConfiguration{
+				KnowledgeBaseId: aws.String(b.kbId),
+				ModelArn:        aws.String(b.modelId),
+				GenerationConfiguration: &types.GenerationConfiguration{
+					PromptTemplate: &types.PromptTemplate{
+						TextPromptTemplate: aws.String("以下の質問に日本語で答えてください。\n質問: ${question}"),
+					},
+					InferenceConfig: &types.InferenceConfig{
+						TextInferenceConfig: &types.TextInferenceConfig{
+							MaxTokens:   aws.Int32(2048),
+							Temperature: aws.Float32(0.7),
+							TopP:        aws.Float32(0.9),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := b.agentRuntimeClient.RetrieveAndGenerate(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("RetrieveAndGenerateの呼び出しに失敗しました: %w", err)
+	}
+
+	if resp.Output == nil || resp.Output.Text == nil {
+		return "", fmt.Errorf("回答の生成に失敗しました: 出力がありません")
+	}
+
+	return *resp.Output.Text, nil
+}
+
 // getEnvOrDefault は環境変数から値を取得し、存在しなければデフォルト値を返す
 func getEnvOrDefault(key, defaultValue string) string {
-	if value, exists := strings.LookupEnv(key); exists {
+	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
 	return defaultValue

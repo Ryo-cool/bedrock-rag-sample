@@ -7,6 +7,7 @@ import (
 	"bedrock-rag-sample/backend/api/handlers"
 	"bedrock-rag-sample/backend/api/routes"
 	"bedrock-rag-sample/backend/config"
+	"bedrock-rag-sample/backend/internal/models"
 	"bedrock-rag-sample/backend/internal/services"
 	"bedrock-rag-sample/backend/pkg/aws"
 
@@ -30,9 +31,35 @@ func main() {
 		log.Fatalf("Bedrockクライアントの初期化に失敗しました: %v", err)
 	}
 
+	// Textractクライアントを初期化
+	textractClient, err := aws.NewTextractClient(cfg, s3Client)
+	if err != nil {
+		log.Fatalf("Textractクライアントの初期化に失敗しました: %v", err)
+	}
+
+	// データベースハンドラーを初期化
+	dbHandler, err := models.NewDBHandler(cfg)
+	if err != nil {
+		log.Printf("警告: データベース接続に失敗しました: %v", err)
+		log.Printf("レコメンド機能は利用できません")
+		dbHandler = nil
+	} else {
+		// プログラム終了時にDBコネクションを閉じる
+		defer dbHandler.Close()
+	}
+
 	// サービスを初期化
 	uploadService := services.NewUploadService(s3Client)
 	summarizeService := services.NewSummarizeService(bedrockClient, uploadService)
+
+	// ドキュメント処理サービスを初期化
+	documentService := services.NewDocumentService(textractClient, summarizeService)
+
+	// レコメンドサービスを初期化
+	var recommendService *services.RecommendService
+	if dbHandler != nil {
+		recommendService = services.NewRecommendService(bedrockClient, dbHandler)
+	}
 
 	// QAサービスの初期化
 	qaService, err := services.NewQAService(bedrockClient, cfg)
@@ -45,6 +72,13 @@ func main() {
 	// ハンドラーを初期化
 	uploadHandler := handlers.NewUploadHandler(uploadService)
 	summarizeHandler := handlers.NewSummarizeHandler(summarizeService)
+	documentHandler := handlers.NewDocumentHandler(documentService)
+
+	// レコメンドハンドラーの初期化
+	var recommendHandler *handlers.RecommendHandler
+	if recommendService != nil && dbHandler != nil {
+		recommendHandler = handlers.NewRecommendHandler(recommendService, dbHandler)
+	}
 
 	// QAハンドラーの初期化（サービスが初期化できなかった場合はnilが渡される）
 	var qaHandler *handlers.QAHandler
@@ -61,7 +95,7 @@ func main() {
 	e.Use(middleware.CORS())
 
 	// ルートを設定
-	routes.SetupRoutes(e, uploadHandler, summarizeHandler, qaHandler)
+	routes.SetupRoutes(e, uploadHandler, summarizeHandler, qaHandler, documentHandler, recommendHandler)
 
 	// ヘルスチェック用のエンドポイント
 	e.GET("/health", func(c echo.Context) error {
