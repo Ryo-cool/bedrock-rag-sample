@@ -11,12 +11,12 @@ import (
 
 // RecommendHandler は類似文書推薦に関するハンドラー
 type RecommendHandler struct {
-	recommendService *services.RecommendService
-	dbHandler        *domain.DBHandler // domain.DBHandler を参照
+	recommendService services.RecommendServiceInterface
+	dbHandler        domain.DBHandlerInterface
 }
 
 // NewRecommendHandler は新しいRecommendHandlerを生成する
-func NewRecommendHandler(recommendService *services.RecommendService, dbHandler *domain.DBHandler) *RecommendHandler { // domain.DBHandler を引数に取る
+func NewRecommendHandler(recommendService services.RecommendServiceInterface, dbHandler domain.DBHandlerInterface) *RecommendHandler {
 	return &RecommendHandler{
 		recommendService: recommendService,
 		dbHandler:        dbHandler,

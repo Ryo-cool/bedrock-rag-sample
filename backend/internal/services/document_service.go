@@ -11,10 +11,11 @@ import (
 )
 
 // SummarizeServiceInterface は要約サービスのインターフェース
-type SummarizeServiceInterface interface {
-	SummarizeText(ctx context.Context, text string) (*SummarizeResult, error)
-	SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error)
-}
+// (削除: summarize_service_interface.go に移動)
+// type SummarizeServiceInterface interface {
+// 	SummarizeText(ctx context.Context, text string) (*SummarizeResult, error)
+// 	SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error)
+// }
 
 // DocumentService はドキュメント（PDF、画像）処理を行うサービス
 type DocumentService struct {
@@ -23,7 +24,7 @@ type DocumentService struct {
 }
 
 // NewDocumentService は新しいDocumentServiceを作成する
-func NewDocumentService(textractClient *aws.TextractClient, summarizeService *SummarizeService) *DocumentService {
+func NewDocumentService(textractClient aws.TextractClientInterface, summarizeService SummarizeServiceInterface) *DocumentService {
 	return &DocumentService{
 		textractClient:   textractClient,
 		summarizeService: summarizeService,

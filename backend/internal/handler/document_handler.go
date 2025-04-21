@@ -10,11 +10,11 @@ import (
 
 // DocumentHandler はドキュメント処理に関するハンドラー
 type DocumentHandler struct {
-	documentService *services.DocumentService
+	documentService services.DocumentServiceInterface
 }
 
 // NewDocumentHandler は新しいDocumentHandlerを生成する
-func NewDocumentHandler(documentService *services.DocumentService) *DocumentHandler {
+func NewDocumentHandler(documentService services.DocumentServiceInterface) *DocumentHandler {
 	return &DocumentHandler{
 		documentService: documentService,
 	}
