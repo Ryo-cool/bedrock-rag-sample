@@ -1,0 +1,50 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+description: プロジェクト全体の開発ルール (General Development Rules)
+globs: ["**/*.*"] # Apply to all files initially
+
+---
+
+## Commit Messages
+
+- Follow the [Conventional Commits](mdc:https:/www.conventionalcommits.org) specification.
+- Use Japanese for commit messages by default.
+
+## Branching Strategy
+
+- Use a Gitflow-like branching strategy:
+  - `main`: Production-ready code.
+  - `develop`: Integration branch for features.
+  - `feature/<feature-name>`: For developing new features.
+  - `release/<version>`: For preparing releases.
+  - `hotfix/<issue>`: For fixing critical bugs in production.
+
+## Pull Requests
+
+- Create Pull Requests (PRs) from feature branches to `develop`.
+- Require at least one approval before merging.
+- Ensure CI checks pass before merging.
+- Write clear PR descriptions explaining the changes and their purpose.
+
+## General Guidelines
+
+- Write clear, concise, and maintainable code.
+- Add comments only for non-trivial logic.
+- Write unit tests for critical components.
+- Keep dependencies updated.
+
+---
+
+## 進捗管理 (Progress Tracking)
+
+- **実装前:** `progress.md` を確認し、現在の進捗状況と次に実装するタスクを把握してください。
+- **実装後:** 完了したタスクに対応するチェックボックスを `progress.md` 上で更新してください (`[ ]` -> `[x]`)。
+- `progress.md` はプロジェクト全体の進捗を示す重要なファイルです。常に最新の状態を保つようにしてください。
+
+```markdown
+進捗はこちらで管理します -> @progress.md
+```
+

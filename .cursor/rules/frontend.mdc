@@ -1,0 +1,91 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+description: フロントエンド (Next.js) のコーディングルール (Frontend Coding Rules)
+globs: ["frontend/**/*.*"] # Apply to files under the frontend directory
+
+---
+
+## 全体方針 (Overall Philosophy)
+
+- **React Best Practices:** [React 公式ドキュメント](mdc:https:/react.dev) に記載されているベストプラクティスに従う。
+- **Next.js Features:** App Router, Server Components, Server Actions などの Next.js 機能を適切に活用する。
+- **Type Safety:** TypeScript を最大限活用し、型安全なコードを目指す。
+- **Maintainability:** 読みやすく、変更しやすい、疎結合なコードを意識する。
+
+## ディレクトリ構造 (Directory Structure)
+
+`src/` ディレクトリを基本とする。
+
+- `app/`: App Router のルーティング、ページコンポーネント、レイアウト
+- `components/`: 再利用可能な UI コンポーネント (Atomic Design 等を参考に分類)
+  - `ui/`: Shadcn/ui などの汎用UIライブラリコンポーネント (もし利用する場合)
+  - `features/`: 特定機能に関連するコンポーネント
+  - `layouts/`: ページ共通のレイアウトコンポーネント
+- `hooks/`: カスタムフック
+- `lib/`: API クライアント、ユーティリティ関数、定数など (特定フレームワークに依存しないロジック)
+- `utils/`: クライアントサイド固有のユーティリティ関数
+- `types/`: グローバルな型定義、API レスポンス/リクエスト型
+- `contexts/`: React Context (必要最小限に)
+- `store/`: 状態管理ライブラリのストア (Zustand などを使用する場合)
+
+## コンポーネント設計 (Component Design)
+
+- **Atomic Design:** Atoms, Molecules, Organisms の考え方を参考にコンポーネントを分割・構成する。
+- **Presentational / Container:** 可能であれば、ロジックを持つ Container Component と見た目のみを担当する Presentational Component を分離する。
+- **Props:** コンポーネント間のデータの受け渡しは Props を基本とする。Props Drilling が深くなる場合は Context や状態管理ライブラリを検討。
+- **Props の型:** TypeScript で明確に定義する。
+
+## 状態管理 (State Management)
+
+- **サーバー状態:** [React Query (TanStack Query)](mdc:https:/tanstack.com/query/latest) を第一選択とする。キャッシュ管理、バックグラウンド更新、ローディング/エラー状態の管理に活用。
+- **クライアント状態:**
+  - 単純な状態: `useState`, `useReducer` を使用。
+  - 複数コンポーネント間で共有される状態: `useContext` を検討 (ただしパフォーマンスに注意)。
+  - 広範囲で複雑な状態: [Zustand](mdc:https:/github.com/pmndrs/zustand) や [Jotai](mdc:https:/jotai.org) などの軽量ライブラリを検討。
+
+## スタイリング (Styling)
+
+- **Tailwind CSS:** ユーティリティファーストを基本とする。クラス名は整理し、可読性を保つ。
+- **共通スタイル:** 繰り返し利用するスタイルは `@apply` を用いて CSS ファイルにまとめるか、共通コンポーネントとして定義する。
+- **CSS Modules / Styled Components:** 原則として使用しない。Tailwind で表現できない複雑なスタイルが必要な場合に限り、限定的に検討。
+
+## API 通信 (API Communication)
+
+- **React Query Hooks:** API エンドポイントごとにカスタムフック (`useXXXQuery`, `useXXXMutation`) を作成する。
+- **API Client:** `fetch` や `axios` をラップした API クライアントを `lib/` 等に作成する。
+- **型定義:** API のリクエスト/レスポンス型を `types/` で定義し、フックやクライアントで利用する。
+
+## フォーム (Forms)
+
+- **React Hook Form:** [React Hook Form](mdc:https:/react-hook-form.com) を推奨。バリデーション、状態管理、パフォーマンスに優れる。
+- **バリデーション:** [Zod](mdc:https:/zod.dev) などのスキーマバリデーションライブラリとの連携を推奨。
+
+## エラーハンドリング (Error Handling)
+
+- **Error Boundary:** アプリケーション全体や主要なセクションを `ErrorBoundary` コンポーネントでラップする。
+- **API エラー:** React Query の `onError` コールバックや `error` 状態を利用してハンドリングする。
+- **UI フィードバック:** エラー発生時にはユーザーにわかりやすいフィードバック（トースト、メッセージ表示など）を提供する。
+
+## テスト (Testing)
+
+- **Jest + React Testing Library:** ユニットテスト、インテグレーションテストの基本スタックとする。
+- **カバレッジ:** 重要なカスタムフック、ユーティリティ関数、複雑なコンポーネントロジックを中心にテストを記述する。
+- **E2E テスト:** 必要に応じて Playwright や Cypress を導入。
+
+## アクセシビリティ (Accessibility - a11y)
+
+- **セマンティック HTML:** 適切な HTML タグを使用する (`button`, `nav`, `article` など)。
+- **ARIA 属性:** 必要に応じて適切な ARIA 属性を付与する。
+- **キーボード操作:** すべてのインタラクティブ要素がキーボードで操作可能であることを確認する。
+- **コントラスト:** テキストと背景のコントラスト比を確保する。
+- **ESLint Plugin:** `eslint-plugin-jsx-a11y` を活用する。
+
+## その他 (Miscellaneous)
+
+- **`any` 型の回避:** 極力 `any` を使用せず、具体的な型を定義する。
+- **絶対パスインポート:** `tsconfig.json` の `paths` (`@/*`) を利用して、可読性の高いインポートを行う。
+- **環境変数:** `.env` ファイルで管理し、`NEXT_PUBLIC_` プレフィックスの有無を意識する。
+- **Prettier:** コードフォーマットは Prettier に従う。
