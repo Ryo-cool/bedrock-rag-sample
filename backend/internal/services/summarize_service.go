@@ -115,7 +115,7 @@ func (s *SummarizeService) SummarizeFileByS3Key(ctx context.Context, s3Key strin
 	// テキストを要約
 	summary, err := s.bedrockClient.GenerateSummary(ctx, string(fileContent))
 	if err != nil {
-		return nil, fmt.Errorf("Bedrockでのファイル要約に失敗しました (key: %s): %w", s3Key, err)
+		return nil, fmt.Errorf("bedrockでのファイル要約に失敗しました (key: %s): %w", s3Key, err)
 	}
 
 	return &SummarizeResult{Summary: summary}, nil // OriginalTextは含めない（任意）

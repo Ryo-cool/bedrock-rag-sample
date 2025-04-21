@@ -114,4 +114,85 @@ func TestRecommendService_FindSimilarDocuments(t *testing.T) {
 }
 
 // TODO: ProcessDocumentForEmbedding のテストを追加
-// TODO: splitIntoChunks のテストを追加 (これは独立してテスト可能)
+func TestRecommendService_ProcessDocumentForEmbedding(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBedrockClient := servicemocks.NewMockBedrockClientInterface(ctrl)
+	mockDBHandler := domainmocks.NewMockDBHandlerInterface(ctrl)
+
+	recommendService := services.NewRecommendService(mockBedrockClient, mockDBHandler)
+
+	ctx := context.Background()
+	doc := &domain.Document{
+		ID:      123,
+		Content: "最初のチャンク。\n\n二番目のチャンク。", // splitIntoChunks は現状これを1つのチャンクとして扱う
+	}
+	combinedChunk := "最初のチャンク。\n\n二番目のチャンク。" // 結合されたチャンク
+	embedding1 := []float32{0.1, 0.1}
+
+	t.Run("正常系", func(t *testing.T) {
+		// --- モックの期待動作設定 ---
+		// 1. GenerateEmbedding for combined chunk
+		mockBedrockClient.EXPECT().
+			GenerateEmbedding(ctx, combinedChunk).
+			Return(embedding1, nil).
+			Times(1)
+		// 2. SaveDocumentEmbedding for combined chunk
+		mockDBHandler.EXPECT().
+			SaveDocumentEmbedding(ctx, doc.ID, combinedChunk, 0, embedding1).
+			Return(int64(1), nil). // チャンク ID 1
+			Times(1)
+		// 3. GenerateEmbedding for chunk2 - Not expected anymore
+		// 4. SaveDocumentEmbedding for chunk2 - Not expected anymore
+
+		// --- テスト実行 ---
+		err := recommendService.ProcessDocumentForEmbedding(ctx, doc)
+
+		// --- アサーション ---
+		assert.NoError(t, err)
+	})
+
+	t.Run("異常系_GenerateEmbeddingエラー", func(t *testing.T) {
+		embeddingError := errors.New("embedding error")
+		// 結合されたチャンクでエラーが発生
+		mockBedrockClient.EXPECT().
+			GenerateEmbedding(ctx, combinedChunk).
+			Return(nil, embeddingError).
+			Times(1)
+
+		err := recommendService.ProcessDocumentForEmbedding(ctx, doc)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, embeddingError)
+		assert.Contains(t, err.Error(), "embedding生成に失敗しました")
+	})
+
+	t.Run("異常系_SaveDocumentEmbeddingエラー", func(t *testing.T) {
+		saveError := errors.New("save error")
+		// 結合されたチャンクの保存でエラー
+		mockBedrockClient.EXPECT().GenerateEmbedding(ctx, combinedChunk).Return(embedding1, nil).Times(1)
+		mockDBHandler.EXPECT().
+			SaveDocumentEmbedding(ctx, doc.ID, combinedChunk, 0, embedding1).
+			Return(int64(0), saveError).
+			Times(1)
+
+		err := recommendService.ProcessDocumentForEmbedding(ctx, doc)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, saveError)
+		assert.Contains(t, err.Error(), "embeddingの保存に失敗しました")
+	})
+
+	t.Run("エッジケース_空のコンテンツ", func(t *testing.T) {
+		emptyDoc := &domain.Document{ID: 456, Content: ""}
+		// splitIntoChunks は空のスライスを返すはずなので、モックは呼ばれないはず
+		mockBedrockClient.EXPECT().GenerateEmbedding(gomock.Any(), gomock.Any()).Times(0)
+		mockDBHandler.EXPECT().SaveDocumentEmbedding(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+		err := recommendService.ProcessDocumentForEmbedding(ctx, emptyDoc)
+		assert.NoError(t, err)
+	})
+}
+
+// splitIntoChunks は ProcessDocumentForEmbedding 経由でテストするため、直接テストは削除

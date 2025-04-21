@@ -30,7 +30,7 @@ func NewQAService(bedrockClient aws.BedrockClientInterface, cfg *config.Config) 
 
 	// Knowledge Base IDの確認
 	if cfg.AWS.KnowledgeBaseID == "" {
-		return nil, errors.New("Knowledge Base IDが設定されていません")
+		return nil, errors.New("knowledge Base IDが設定されていません")
 	}
 
 	return &QAService{

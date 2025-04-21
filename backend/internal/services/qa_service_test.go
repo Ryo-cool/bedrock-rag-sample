@@ -58,7 +58,7 @@ func TestQAService_NewQAService(t *testing.T) {
 		qas, err := services.NewQAService(mockBedrockClient, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, qas)
-		assert.Contains(t, err.Error(), "Knowledge Base IDが設定されていません")
+		assert.Contains(t, err.Error(), "knowledge Base IDが設定されていません")
 	})
 
 	// AWS設定読み込みエラーのテストは、awsconfig.LoadDefaultConfig をモック化する必要があり、やや複雑になるため省略
