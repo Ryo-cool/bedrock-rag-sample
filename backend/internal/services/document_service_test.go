@@ -51,6 +51,34 @@ func (a *summarizeServiceAdapter) SummarizeFile(ctx context.Context, file *multi
 	}, nil
 }
 
+// SummarizeFileByS3Key メソッドをアダプターに追加
+func (a *summarizeServiceAdapter) SummarizeFileByS3Key(ctx context.Context, s3Key string) (*SummarizeResult, error) {
+	// 注意: servicemock.MockSummarizeServiceInterface にも SummarizeFileByS3Key が必要
+	// 現状の servicemock パッケージのモックが古いため、再生成が必要になる可能性がある。
+	// ここでは仮に servicemock に同名メソッドがあると仮定して実装する。
+	// result, err := a.mockService.SummarizeFileByS3Key(ctx, s3Key)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if result == nil {
+	// 	return nil, nil
+	// }
+	// return &SummarizeResult{
+	// 	Summary:    result.Summary,
+	// 	// SourceText は SummarizeFileByS3Key の戻り値に含まれない想定
+	// }, nil
+
+	// 一時的な実装: servicemock の更新が確認できるまでエラーを返すか、nil を返す。
+	// もしくは、このテストファイルが SummarizeFileByS3Key を実際に必要とするか確認する。
+	// TestProcessDocument は SummarizeText しか使っていないため、このメソッドは不要かもしれない。
+	// TestProcessDocumentByS3Key で SummarizeText を呼ぶので、やはり不要の可能性が高い。
+	// 不要であればこのメソッド自体を削除する。
+	// → 確認したところ TestProcessDocumentByS3Key も SummarizeText を呼ぶため、
+	//   SummarizeFileByS3Key はアダプターには不要。
+	//   しかし、インターフェースには存在するため、ダミー実装が必要。
+	return nil, errors.New("SummarizeFileByS3Key not implemented in adapter") // ダミー実装
+}
+
 func TestProcessDocument(t *testing.T) {
 	longText := "これはテストドキュメントの内容です。十分な長さがあるので要約も生成されます。これはテストです。テストです。テストです。繰り返しです。長い文章です。"
 	longErrorText := "これはテストドキュメントの内容です。十分な長さがあるので要約も生成されますが、要約に失敗します。これはテストです。テストです。テストです。繰り返しです。長い文章です。"
