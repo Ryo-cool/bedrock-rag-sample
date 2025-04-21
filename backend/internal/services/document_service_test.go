@@ -1,54 +1,56 @@
-package services
+package services_test
 
 import (
 	"context"
 	"errors"
+	"io"
 	"mime/multipart"
+	"net/textproto"
+	"path/filepath"
 	"testing"
 
-	"bedrock-rag-sample/backend/internal/servicemock"
+	// models は ProcessDocument/ProcessDocumentByS3Key の戻り値型 DocumentProcessResult で使われるため必要
+
+	// repositorymocks と repository は不要
+	// repositorymocks "bedrock-rag-sample/backend/internal/repository/mock"
+	// "bedrock-rag-sample/backend/internal/repository"
+	"bedrock-rag-sample/backend/internal/services"
+	servicemocks "bedrock-rag-sample/backend/internal/services/mocks"
 	"bedrock-rag-sample/backend/pkg/aws"
 	awsmock "bedrock-rag-sample/backend/pkg/aws/mock"
 
 	"github.com/golang/mock/gomock"
+	// uuid は不要になった
+	// "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// モックアダプター: servicemock.SummarizeResult から services.SummarizeResult への変換
+// summarizeServiceAdapter は SummarizeServiceInterface のモックアダプター
+// DocumentService のテストで SummarizeService のモックを使うために必要
 type summarizeServiceAdapter struct {
-	mockService *servicemock.MockSummarizeServiceInterface
+	mockService *servicemocks.MockSummarizeServiceInterface // モックサービスを保持 (正しい型を参照)
 }
 
-func newSummarizeServiceAdapter(mockService *servicemock.MockSummarizeServiceInterface) SummarizeServiceInterface {
+// newSummarizeServiceAdapter は新しいアダプターを作成する
+func newSummarizeServiceAdapter(mockService *servicemocks.MockSummarizeServiceInterface) services.SummarizeServiceInterface {
 	return &summarizeServiceAdapter{mockService: mockService}
 }
 
-func (a *summarizeServiceAdapter) SummarizeText(ctx context.Context, text string) (*SummarizeResult, error) {
-	result, err := a.mockService.SummarizeText(ctx, text)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, nil
-	}
-	return &SummarizeResult{
-		Summary:    result.Summary,
-		SourceText: result.SourceText,
-	}, nil
+// SummarizeText はモックサービスに委譲する (型変換は不要)
+func (a *summarizeServiceAdapter) SummarizeText(ctx context.Context, text string) (*services.SummarizeResult, error) {
+	return a.mockService.SummarizeText(ctx, text) // モックが *services.SummarizeResult を返す想定
 }
 
-func (a *summarizeServiceAdapter) SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error) {
-	result, err := a.mockService.SummarizeFile(ctx, file)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, nil
-	}
-	return &SummarizeResult{
-		Summary:    result.Summary,
-		SourceText: result.SourceText,
-	}, nil
+// SummarizeFile はインターフェースを満たすためのダミー実装 (新しいシグネチャ)
+// このテストファイルでは呼び出されない想定
+func (a *summarizeServiceAdapter) SummarizeFile(ctx context.Context, fileContent io.Reader, fileName string) (*services.SummarizeResult, error) {
+	return nil, errors.New("SummarizeFile not expected to be called via adapter")
+}
+
+// SummarizeFileByS3Key はモックサービスに委譲する (型変換は不要)
+func (a *summarizeServiceAdapter) SummarizeFileByS3Key(ctx context.Context, s3Key string) (*services.SummarizeResult, error) {
+	return a.mockService.SummarizeFileByS3Key(ctx, s3Key) // モックが *services.SummarizeResult を返す想定
 }
 
 func TestProcessDocument(t *testing.T) {
@@ -60,18 +62,15 @@ func TestProcessDocument(t *testing.T) {
 		fileHeader        *multipart.FileHeader
 		textractResult    *aws.TextractResult
 		textractErr       error
-		summarizeResult   *servicemock.SummarizeResult
+		summarizeResult   *services.SummarizeResult
 		summarizeErr      error
-		expectedResult    *DocumentProcessResult
+		expectedResult    *services.DocumentProcessResult
 		expectError       bool
 		shouldCallSummary bool
 	}{
 		{
-			name: "PDFファイルの処理成功（要約あり）",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.pdf",
-				Size:     1024,
-			},
+			name:       "PDFファイルの処理成功（要約あり）",
+			fileHeader: createTestFileHeader("test.pdf", longText),
 			textractResult: &aws.TextractResult{
 				Text:       longText,
 				DocumentID: "test.pdf",
@@ -79,13 +78,13 @@ func TestProcessDocument(t *testing.T) {
 				Pages:      1,
 			},
 			textractErr: nil,
-			summarizeResult: &servicemock.SummarizeResult{
+			summarizeResult: &services.SummarizeResult{
 				Summary:    "テストドキュメントの要約",
 				SourceText: "元のテキスト",
 			},
 			summarizeErr:      nil,
 			shouldCallSummary: true,
-			expectedResult: &DocumentProcessResult{
+			expectedResult: &services.DocumentProcessResult{
 				OriginalText: longText,
 				Summary:      "テストドキュメントの要約",
 				DocumentInfo: aws.TextractResult{
@@ -99,11 +98,8 @@ func TestProcessDocument(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "PDFファイルの処理成功（テキストが短いので要約なし）",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.pdf",
-				Size:     1024,
-			},
+			name:       "PDFファイルの処理成功（テキストが短いので要約なし）",
+			fileHeader: createTestFileHeader("test.pdf", "短いテキスト"),
 			textractResult: &aws.TextractResult{
 				Text:       "短いテキスト",
 				DocumentID: "test.pdf",
@@ -114,7 +110,7 @@ func TestProcessDocument(t *testing.T) {
 			summarizeResult:   nil,
 			summarizeErr:      nil,
 			shouldCallSummary: false,
-			expectedResult: &DocumentProcessResult{
+			expectedResult: &services.DocumentProcessResult{
 				OriginalText: "短いテキスト",
 				Summary:      "",
 				DocumentInfo: aws.TextractResult{
@@ -128,11 +124,8 @@ func TestProcessDocument(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "サポートされていないファイル形式",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.docx",
-				Size:     1024,
-			},
+			name:              "サポートされていないファイル形式",
+			fileHeader:        createTestFileHeader("test.docx", "dummy"),
 			textractResult:    nil,
 			textractErr:       nil,
 			summarizeResult:   nil,
@@ -142,11 +135,8 @@ func TestProcessDocument(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name: "テキスト抽出エラー",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.pdf",
-				Size:     1024,
-			},
+			name:              "テキスト抽出エラー",
+			fileHeader:        createTestFileHeader("test.pdf", "dummy"),
 			textractResult:    nil,
 			textractErr:       errors.New("テキスト抽出エラー"),
 			summarizeResult:   nil,
@@ -156,11 +146,8 @@ func TestProcessDocument(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name: "テキスト抽出は成功したが空文字",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.pdf",
-				Size:     1024,
-			},
+			name:       "テキスト抽出は成功したが空文字",
+			fileHeader: createTestFileHeader("test.pdf", ""),
 			textractResult: &aws.TextractResult{
 				Text:       "",
 				DocumentID: "test.pdf",
@@ -175,11 +162,8 @@ func TestProcessDocument(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name: "要約エラーでも処理は成功する",
-			fileHeader: &multipart.FileHeader{
-				Filename: "test.pdf",
-				Size:     1024,
-			},
+			name:       "要約エラーでも処理は成功する",
+			fileHeader: createTestFileHeader("test.pdf", longErrorText),
 			textractResult: &aws.TextractResult{
 				Text:       longErrorText,
 				DocumentID: "test.pdf",
@@ -187,10 +171,10 @@ func TestProcessDocument(t *testing.T) {
 				Pages:      1,
 			},
 			textractErr:       nil,
-			summarizeResult:   &servicemock.SummarizeResult{},
+			summarizeResult:   &services.SummarizeResult{},
 			summarizeErr:      errors.New("要約エラー"),
 			shouldCallSummary: true,
-			expectedResult: &DocumentProcessResult{
+			expectedResult: &services.DocumentProcessResult{
 				OriginalText: longErrorText,
 				Summary:      "",
 				DocumentInfo: aws.TextractResult{
@@ -207,50 +191,46 @@ func TestProcessDocument(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// gomockコントローラーの作成
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			// モックの作成
 			mockTextract := awsmock.NewMockTextractClientInterface(ctrl)
-			mockSummarize := servicemock.NewMockSummarizeServiceInterface(ctrl)
+			mockSummarize := servicemocks.NewMockSummarizeServiceInterface(ctrl)
+			summarizeAdapter := newSummarizeServiceAdapter(mockSummarize)
 
-			// モックの振る舞いを設定
-			mockTextract.EXPECT().
-				ExtractTextFromDocument(gomock.Any(), tc.fileHeader).
-				Return(tc.textractResult, tc.textractErr).
-				AnyTimes()
+			documentService := services.NewDocumentService(mockTextract, summarizeAdapter)
 
-			if tc.shouldCallSummary {
+			ctx := context.Background()
+
+			if tc.fileHeader != nil {
+				mockTextract.EXPECT().
+					ExtractTextFromDocument(ctx, tc.fileHeader).
+					Return(tc.textractResult, tc.textractErr).
+					MaxTimes(1)
+			}
+
+			if tc.shouldCallSummary && tc.textractResult != nil {
 				mockSummarize.EXPECT().
-					SummarizeText(gomock.Any(), longText).
+					SummarizeText(ctx, tc.textractResult.Text).
 					Return(tc.summarizeResult, tc.summarizeErr).
-					AnyTimes()
-
-				if tc.textractResult != nil && tc.textractResult.Text == longErrorText {
-					mockSummarize.EXPECT().
-						SummarizeText(gomock.Any(), longErrorText).
-						Return(tc.summarizeResult, tc.summarizeErr).
-						AnyTimes()
-				}
+					MaxTimes(1)
 			}
 
-			// アダプターを介してテスト対象のサービスを作成
-			documentService := &DocumentService{
-				textractClient:   mockTextract,
-				summarizeService: newSummarizeServiceAdapter(mockSummarize),
-			}
+			result, err := documentService.ProcessDocument(ctx, tc.fileHeader)
 
-			// テスト実行
-			result, err := documentService.ProcessDocument(context.Background(), tc.fileHeader)
-
-			// 検証
 			if tc.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
+				if tc.textractErr != nil {
+					assert.ErrorIs(t, err, tc.textractErr)
+				} else if tc.fileHeader != nil && filepath.Ext(tc.fileHeader.Filename) == ".docx" {
+					assert.Contains(t, err.Error(), "サポートされていないファイル形式です")
+				} else if tc.textractResult != nil && tc.textractResult.Text == "" {
+					assert.Contains(t, err.Error(), "テキストを抽出できませんでした")
+				}
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, result)
+				require.NotNil(t, result)
 				assert.Equal(t, tc.expectedResult.OriginalText, result.OriginalText)
 				assert.Equal(t, tc.expectedResult.Summary, result.Summary)
 				assert.Equal(t, tc.expectedResult.FileType, result.FileType)
@@ -267,9 +247,9 @@ func TestProcessDocumentByS3Key(t *testing.T) {
 		s3Key             string
 		textractResult    *aws.TextractResult
 		textractErr       error
-		summarizeResult   *servicemock.SummarizeResult
+		summarizeResult   *services.SummarizeResult
 		summarizeErr      error
-		expectedResult    *DocumentProcessResult
+		expectedResult    *services.DocumentProcessResult
 		expectError       bool
 		shouldCallSummary bool
 	}{
@@ -283,13 +263,13 @@ func TestProcessDocumentByS3Key(t *testing.T) {
 				Pages:      1,
 			},
 			textractErr: nil,
-			summarizeResult: &servicemock.SummarizeResult{
+			summarizeResult: &services.SummarizeResult{
 				Summary:    "S3ドキュメントの要約",
 				SourceText: "元のテキスト",
 			},
 			summarizeErr:      nil,
 			shouldCallSummary: true,
-			expectedResult: &DocumentProcessResult{
+			expectedResult: &services.DocumentProcessResult{
 				OriginalText: longText,
 				Summary:      "S3ドキュメントの要約",
 				DocumentInfo: aws.TextractResult{
@@ -317,7 +297,7 @@ func TestProcessDocumentByS3Key(t *testing.T) {
 			name:              "S3キーからのテキスト抽出エラー",
 			s3Key:             "documents/pdf/error.pdf",
 			textractResult:    nil,
-			textractErr:       errors.New("テキスト抽出エラー"),
+			textractErr:       errors.New("S3テキスト抽出エラー"),
 			summarizeResult:   nil,
 			summarizeErr:      nil,
 			shouldCallSummary: false,
@@ -328,47 +308,56 @@ func TestProcessDocumentByS3Key(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// gomockコントローラーの作成
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			// モックの作成
 			mockTextract := awsmock.NewMockTextractClientInterface(ctrl)
-			mockSummarize := servicemock.NewMockSummarizeServiceInterface(ctrl)
+			mockSummarize := servicemocks.NewMockSummarizeServiceInterface(ctrl)
+			summarizeAdapter := newSummarizeServiceAdapter(mockSummarize)
 
-			// モックの振る舞いを設定
+			documentService := services.NewDocumentService(mockTextract, summarizeAdapter)
+
+			ctx := context.Background()
+
 			mockTextract.EXPECT().
-				ExtractTextFromS3Key(gomock.Any(), tc.s3Key).
+				ExtractTextFromS3Key(ctx, tc.s3Key).
 				Return(tc.textractResult, tc.textractErr).
-				AnyTimes()
+				MaxTimes(1)
 
-			if tc.shouldCallSummary {
+			if tc.shouldCallSummary && tc.textractResult != nil {
 				mockSummarize.EXPECT().
-					SummarizeText(gomock.Any(), gomock.Any()).
+					SummarizeText(ctx, tc.textractResult.Text).
 					Return(tc.summarizeResult, tc.summarizeErr).
-					AnyTimes()
+					MaxTimes(1)
 			}
 
-			// アダプターを介してテスト対象のサービスを作成
-			documentService := &DocumentService{
-				textractClient:   mockTextract,
-				summarizeService: newSummarizeServiceAdapter(mockSummarize),
-			}
+			result, err := documentService.ProcessDocumentByS3Key(ctx, tc.s3Key)
 
-			// テスト実行
-			result, err := documentService.ProcessDocumentByS3Key(context.Background(), tc.s3Key)
-
-			// 検証
 			if tc.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
+				if tc.textractErr != nil {
+					assert.ErrorIs(t, err, tc.textractErr)
+				} else if filepath.Ext(tc.s3Key) == ".docx" {
+					assert.Contains(t, err.Error(), "サポートされていないファイル形式です")
+				}
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, result)
+				require.NotNil(t, result)
 				assert.Equal(t, tc.expectedResult.OriginalText, result.OriginalText)
 				assert.Equal(t, tc.expectedResult.Summary, result.Summary)
 				assert.Equal(t, tc.expectedResult.FileType, result.FileType)
 			}
 		})
+	}
+}
+
+// createTestFileHeader はテスト用の multipart.FileHeader を作成するヘルパー関数
+// (document_service.go で必要になる可能性があるため残しておく)
+func createTestFileHeader(filename string, content string) *multipart.FileHeader {
+	return &multipart.FileHeader{
+		Filename: filename,
+		Header:   textproto.MIMEHeader{},
+		Size:     int64(len(content)),
 	}
 }

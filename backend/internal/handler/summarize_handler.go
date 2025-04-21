@@ -10,11 +10,11 @@ import (
 
 // SummarizeHandler はテキスト要約に関するハンドラー
 type SummarizeHandler struct {
-	summarizeService *services.SummarizeService
+	summarizeService services.SummarizeServiceInterface
 }
 
 // NewSummarizeHandler は新しいSummarizeHandlerを生成する
-func NewSummarizeHandler(summarizeService *services.SummarizeService) *SummarizeHandler {
+func NewSummarizeHandler(summarizeService services.SummarizeServiceInterface) *SummarizeHandler {
 	return &SummarizeHandler{
 		summarizeService: summarizeService,
 	}

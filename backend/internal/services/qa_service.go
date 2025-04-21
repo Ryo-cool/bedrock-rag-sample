@@ -15,13 +15,13 @@ import (
 
 // QAService はQ&A処理を行うサービス
 type QAService struct {
-	bedrockClient *aws.BedrockClient
+	bedrockClient aws.BedrockClientInterface
 	kbID          string
 	agentClient   *bedrockagent.Client
 }
 
 // NewQAService は新しいQAServiceを作成する
-func NewQAService(bedrockClient *aws.BedrockClient, cfg *config.Config) (*QAService, error) {
+func NewQAService(bedrockClient aws.BedrockClientInterface, cfg *config.Config) (*QAService, error) {
 	// AWSクライアントの初期化
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(cfg.AWS.Region))
 	if err != nil {
@@ -30,7 +30,7 @@ func NewQAService(bedrockClient *aws.BedrockClient, cfg *config.Config) (*QAServ
 
 	// Knowledge Base IDの確認
 	if cfg.AWS.KnowledgeBaseID == "" {
-		return nil, errors.New("Knowledge Base IDが設定されていません")
+		return nil, errors.New("knowledge Base IDが設定されていません")
 	}
 
 	return &QAService{

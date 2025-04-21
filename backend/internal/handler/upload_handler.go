@@ -10,11 +10,11 @@ import (
 
 // UploadHandler はファイルのアップロードに関するハンドラー
 type UploadHandler struct {
-	uploadService *services.UploadService
+	uploadService services.UploadServiceInterface
 }
 
 // NewUploadHandler は新しいUploadHandlerを生成する
-func NewUploadHandler(uploadService *services.UploadService) *UploadHandler {
+func NewUploadHandler(uploadService services.UploadServiceInterface) *UploadHandler {
 	return &UploadHandler{
 		uploadService: uploadService,
 	}

@@ -10,11 +10,11 @@ import (
 
 // QAHandler はQAに関するハンドラー
 type QAHandler struct {
-	qaService *services.QAService
+	qaService services.QAServiceInterface
 }
 
 // NewQAHandler は新しいQAHandlerを生成する
-func NewQAHandler(qaService *services.QAService) *QAHandler {
+func NewQAHandler(qaService services.QAServiceInterface) *QAHandler {
 	return &QAHandler{
 		qaService: qaService,
 	}

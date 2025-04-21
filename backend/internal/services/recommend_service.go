@@ -11,12 +11,12 @@ import (
 
 // RecommendService はテキスト類似度に基づく推薦を行うサービス
 type RecommendService struct {
-	bedrockClient *aws.BedrockClient
-	dbHandler     *domain.DBHandler
+	bedrockClient aws.BedrockClientInterface
+	dbHandler     domain.DBHandlerInterface
 }
 
 // NewRecommendService は新しいRecommendServiceを作成する
-func NewRecommendService(bedrockClient *aws.BedrockClient, dbHandler *domain.DBHandler) *RecommendService {
+func NewRecommendService(bedrockClient aws.BedrockClientInterface, dbHandler domain.DBHandlerInterface) *RecommendService {
 	return &RecommendService{
 		bedrockClient: bedrockClient,
 		dbHandler:     dbHandler,
@@ -46,13 +46,13 @@ func (s *RecommendService) ProcessDocumentForEmbedding(ctx context.Context, doc 
 		// Embeddingを生成
 		embedding, err := s.bedrockClient.GenerateEmbedding(ctx, chunk)
 		if err != nil {
-			return fmt.Errorf("Embedding生成に失敗しました: %w", err)
+			return fmt.Errorf("embedding生成に失敗しました: %w", err)
 		}
 
 		// 生成したEmbeddingを保存
 		_, err = s.dbHandler.SaveDocumentEmbedding(ctx, doc.ID, chunk, i, embedding)
 		if err != nil {
-			return fmt.Errorf("Embeddingの保存に失敗しました: %w", err)
+			return fmt.Errorf("embeddingの保存に失敗しました: %w", err)
 		}
 	}
 
