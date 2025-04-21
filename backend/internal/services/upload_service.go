@@ -11,7 +11,7 @@ import (
 
 // UploadService はファイルアップロード処理を行うサービス
 type UploadService struct {
-	s3Client *aws.S3Client
+	s3Client aws.S3ClientInterface
 }
 
 // NewUploadService は新しいUploadServiceを作成する

@@ -12,7 +12,7 @@ import (
 
 // SummarizeService はテキスト要約処理を行うサービス
 type SummarizeService struct {
-	bedrockClient *aws.BedrockClient
+	bedrockClient aws.BedrockClientInterface
 	uploadService *UploadService
 }
 

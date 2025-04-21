@@ -10,10 +10,16 @@ import (
 	"bedrock-rag-sample/backend/pkg/aws"
 )
 
+// SummarizeServiceInterface は要約サービスのインターフェース
+type SummarizeServiceInterface interface {
+	SummarizeText(ctx context.Context, text string) (*SummarizeResult, error)
+	SummarizeFile(ctx context.Context, file *multipart.FileHeader) (*SummarizeResult, error)
+}
+
 // DocumentService はドキュメント（PDF、画像）処理を行うサービス
 type DocumentService struct {
-	textractClient   *aws.TextractClient
-	summarizeService *SummarizeService
+	textractClient   aws.TextractClientInterface
+	summarizeService SummarizeServiceInterface
 }
 
 // NewDocumentService は新しいDocumentServiceを作成する
