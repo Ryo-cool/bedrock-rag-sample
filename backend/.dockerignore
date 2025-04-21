@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Go specific
+/tmp
+*.test
+*.out
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Environment variables
+.env*
+!.env.example
+
+# Docker related
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Project specific
+/docs
+README.md 
