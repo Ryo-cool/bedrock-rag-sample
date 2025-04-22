@@ -1,6 +1,6 @@
 ---
 description: 
-globs: 
+globs: *.tsx,*.ts
 alwaysApply: false
 ---
 description: フロントエンド (Next.js) のコーディングルール (Frontend Coding Rules)
@@ -14,16 +14,20 @@ globs: ["frontend/**/*.*"] # Apply to files under the frontend directory
 - **Next.js Features:** App Router, Server Components, Server Actions などの Next.js 機能を適切に活用する。
 - **Type Safety:** TypeScript を最大限活用し、型安全なコードを目指す。
 - **Maintainability:** 読みやすく、変更しやすい、疎結合なコードを意識する。
+- **UI Design:** ニューモフィズム (Neumorphism) をデザインの基本コンセプトとする。
 
 ## ディレクトリ構造 (Directory Structure)
 
 `src/` ディレクトリを基本とする。
 
-- `app/`: App Router のルーティング、ページコンポーネント、レイアウト
-- `components/`: 再利用可能な UI コンポーネント (Atomic Design 等を参考に分類)
-  - `ui/`: Shadcn/ui などの汎用UIライブラリコンポーネント (もし利用する場合)
-  - `features/`: 特定機能に関連するコンポーネント
-  - `layouts/`: ページ共通のレイアウトコンポーネント
+- `app/`: App Router のルーティング、ページコンポーネント、レイアウト (`pages` 相当)
+- `components/`: 再利用可能な UI コンポーネント。Atomic Design に基づき分類。
+  - `atoms/`: それ以上分割できない最小 UI 要素 (Button, Input, Label 等)。状態を持たない Presentational Component が主。
+  - `molecules/`: Atoms を組み合わせて特定の機能を持つ単位 (SearchForm, LabeledInput 等)。
+  - `organisms/`: Atoms や Molecules を組み合わせて構成される、より大きな UI パーツ (Header, Sidebar, ArticleCard 等)。
+  - `ui/`: Shadcn/ui などの外部 UI ライブラリから導入したコンポーネント、またはそのラッパー。
+  - `features/`: 特定の機能・ドメインに関連するコンポーネント群 (例: `src/components/features/summarize/SummarizeResultDisplay`)。主に Organisms や Molecules を組み合わせて構成される。
+  - `layouts/`: ページ全体のレイアウト構造を定義するコンポーネント (Atomic Design の Templates に相当)。
 - `hooks/`: カスタムフック
 - `lib/`: API クライアント、ユーティリティ関数、定数など (特定フレームワークに依存しないロジック)
 - `utils/`: クライアントサイド固有のユーティリティ関数
@@ -48,8 +52,12 @@ globs: ["frontend/**/*.*"] # Apply to files under the frontend directory
 
 ## スタイリング (Styling)
 
-- **Tailwind CSS:** ユーティリティファーストを基本とする。クラス名は整理し、可読性を保つ。
-- **共通スタイル:** 繰り返し利用するスタイルは `@apply` を用いて CSS ファイルにまとめるか、共通コンポーネントとして定義する。
+- **デザインコンセプト:** ニューモフィズム (Neumorphism) を採用する。UI要素は背景と同じ色調の微妙な凹凸で表現する。
+- **Tailwind CSS:** ユーティリティファーストを基本とする。
+  - ニューモフィズム実現のため、`box-shadow` ユーティリティ（特に `inner` や複数の影の組み合わせ）を積極的に活用する。
+  - 色は彩度を抑え、背景色に近い色を選択する。
+  - クラス名は整理し、可読性を保つ。
+- **共通スタイル:** 繰り返し利用するスタイル（特にニューモフィズムの影や形状に関するユーティリティの組み合わせ）は `@apply` を用いて CSS ファイルにまとめるか、共通コンポーネントとして定義する。
 - **CSS Modules / Styled Components:** 原則として使用しない。Tailwind で表現できない複雑なスタイルが必要な場合に限り、限定的に検討。
 
 ## API 通信 (API Communication)
