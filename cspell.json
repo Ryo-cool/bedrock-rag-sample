@@ -39,6 +39,7 @@
     "stretchr",
     "swaggo",
     "textract",
+    "turbopack",
     "urlesc",
     "valyala",
     "zerolog"

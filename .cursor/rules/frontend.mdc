@@ -1,6 +1,6 @@
 ---
 description: 
-globs: *.tsx,.ts
+globs: *.tsx
 alwaysApply: false
 ---
 description: フロントエンド (Next.js) のコーディングルール (Frontend Coding Rules)
