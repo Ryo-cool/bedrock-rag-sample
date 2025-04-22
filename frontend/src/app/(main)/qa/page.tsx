@@ -5,7 +5,9 @@ import { Button } from '@/components/atoms/Button';
 import { Spinner } from '@/components/atoms/Spinner';
 import { TextAreaInput } from '@/components/molecules/TextAreaInput';
 import { ResultDisplay } from '@/components/organisms/ResultDisplay';
+import { RecommendationDisplay } from '@/components/organisms/RecommendationDisplay';
 import { useQaMutation } from '@/hooks/api/useQaMutation';
+import { useRecommendMutation } from '@/hooks/api/useRecommendMutation';
 import { cn } from '@/lib/utils'; // For conditional styling
 import type { QaResponse, Message, DocumentSnippet } from '@/types/api'; // Import necessary types
 
@@ -22,8 +24,10 @@ interface ChatMessage {
 const QAPage: React.FC = () => {
     const [inputText, setInputText] = useState<string>('');
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-    const { mutate, data, error, isPending, reset } = useQaMutation();
-    const chatEndRef = useRef<HTMLDivElement>(null); // Ref to scroll to the bottom
+    const [lastUserQuery, setLastUserQuery] = useState<string | null>(null); // Store last query for recommendation
+    const { mutate: qaMutate, data: qaData, error: qaError, isPending: isQaPending, reset: resetQa } = useQaMutation();
+    const chatEndRef = useRef<HTMLDivElement>(null);
+    const { mutate: recommendMutate, data: recommendData, error: recommendError, isPending: isRecommendPending, reset: resetRecommend } = useRecommendMutation();
 
     // Scroll to bottom when chat history updates
     useEffect(() => {
@@ -32,37 +36,46 @@ const QAPage: React.FC = () => {
 
     // Add AI response to chat history when data arrives
     useEffect(() => {
-        if (data) {
+        if (qaData) {
+            // Add AI message
             setChatHistory((prev) => [
                 ...prev,
-                { sender: 'ai', content: data.answer, sources: data.sources }, // Keep API source format in state
+                { sender: 'ai', content: qaData.answer, sources: qaData.sources }, // Keep API source format in state
             ]);
-            reset(); // Reset mutation state after processing
+
+            // Trigger recommendation based on the last user query
+            if (lastUserQuery) {
+                console.log("Triggering recommendation for query:", lastUserQuery);
+                recommendMutate({ query: lastUserQuery });
+            }
+            resetQa(); // Reset QA mutation state after processing
         }
-    }, [data, reset]);
+    }, [qaData, resetQa, lastUserQuery, recommendMutate]);
 
     // Add error message to chat history
     useEffect(() => {
-        if (error) {
+        if (qaError) {
             setChatHistory((prev) => [
                 ...prev,
-                { sender: 'ai', content: <p className="text-red-500">エラー: {error.message}</p> },
+                { sender: 'ai', content: <p className="text-red-500">エラー: {qaError.message}</p> },
             ]);
-            reset(); // Reset mutation state after processing
+            resetQa(); // Reset mutation state after processing
         }
-    }, [error, reset]);
+    }, [qaError, resetQa]);
 
 
     const handleSendMessage = () => {
-        if (!inputText.trim() || isPending) return;
+        const query = inputText.trim();
+        if (!query || isQaPending) return;
 
-        const userMessage: ChatMessage = { sender: 'user', content: inputText };
+        setLastUserQuery(query); // Store query for recommendations
+        const userMessage: ChatMessage = { sender: 'user', content: query };
         // Create message history for API request (currently just the latest message)
-        const apiMessages: Message[] = [{ role: 'user', content: inputText }];
+        const apiMessages: Message[] = [{ role: 'user', content: query }];
 
+        resetRecommend(); // Clear previous recommendations when sending new message
         setChatHistory((prev) => [...prev, userMessage]);
-        // mutate({ query: inputText }); // Incorrect request format
-        mutate({ messages: apiMessages }); // Corrected: Pass messages array
+        qaMutate({ messages: apiMessages }); // Corrected: Pass messages array and use correct mutate function
         setInputText(''); // Clear input field
     };
 
@@ -106,7 +119,7 @@ const QAPage: React.FC = () => {
                          )}
                     </div>
                 ))}
-                 {isPending && ( // Show spinner while AI is thinking
+                 {isQaPending && ( // Show spinner while AI is thinking
                      <div className="flex justify-start">
                          <div className={cn(bubbleBaseStyle, aiBubbleStyle, "flex items-center")}>
                               <Spinner size="sm" className="mr-2" />
@@ -117,6 +130,16 @@ const QAPage: React.FC = () => {
                 <div ref={chatEndRef} /> {/* Element to scroll to */}
             </div>
 
+            {/* Recommendation Area */}
+            {(isRecommendPending || recommendData || recommendError) && ( // Show if loading, has data, or has error
+                <RecommendationDisplay
+                    recommendations={recommendData?.recommendations}
+                    isLoading={isRecommendPending}
+                    error={recommendError}
+                    className="mb-4" // Add some margin below recommendations
+                />
+            )}
+
             {/* Input Area */}
             {/* Wrap TextAreaInput and Button for better layout control if needed */}
             <div className="flex items-start gap-2">
@@ -126,14 +149,14 @@ const QAPage: React.FC = () => {
                     onSubmit={handleSendMessage} // Use onSubmit for Enter key sending
                     placeholder="質問を入力してください..."
                     rows={1} // Start with 1 row, auto-grows potentially
-                    isLoading={isPending}
+                    isLoading={isQaPending} // Input disabled only during QA fetch
                     buttonText="送信" // Use custom button below
                     className="flex-grow"
                 />
                  <Button
                      onClick={handleSendMessage}
-                     disabled={isPending || !inputText.trim()}
-                     isLoading={isPending}
+                     disabled={isQaPending || !inputText.trim()} // Disable button during QA fetch
+                     isLoading={isQaPending} // Corrected: Reflect QA loading state
                      className="self-end" // Align button with bottom of text area if it grows
                  >
                     送信
