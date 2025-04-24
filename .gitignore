@@ -48,5 +48,19 @@ go.work
 *.swp
 *~
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+*.tfvars
+# 以下例外的に管理したい場合はコメントアウト
+# !example.tfvars 
+.terraformrc
+terraform.rc
+crash.log
+crash.*.log
+.terraform.lock.hcl
+
 # Project specific ignores
 progress.md 
