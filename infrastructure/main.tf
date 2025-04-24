@@ -18,11 +18,13 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 provider "awscc" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 # --- Resource definitions will go here --- #
@@ -39,4 +41,10 @@ locals {
     Environment = var.environment
     Terraform   = "true"
   }
+}
+
+variable "aws_profile" {
+  description = "AWS profile to use for authentication"
+  type        = string
+  default     = "bedrock-sso"
 } 
