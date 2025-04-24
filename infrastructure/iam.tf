@@ -58,45 +58,58 @@ resource "aws_iam_role" "ecs_task_role" {
 # Defines permissions for S3, Bedrock, Textract, etc.
 resource "aws_iam_policy" "ecs_task_policy" {
   name        = "${local.project_name}-ecs-task-policy"
-  description = "Policy for ECS tasks to access S3, Bedrock, and Textract"
+  description = "Policy for ECS tasks to access S3, Bedrock, Textract, and KB"
 
   policy = jsonencode({
     Version   = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3Access"
         Action   = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:ListBucket"
-          # Add more S3 actions if needed
         ]
         Effect   = "Allow"
         Resource = [
           aws_s3_bucket.documents.arn,
           "${aws_s3_bucket.documents.arn}/*"
-          # Add Textract results bucket ARN if created
         ]
       },
       {
+        Sid    = "BedrockModelAccess"
         Action = [
-          "bedrock:InvokeModel", # For direct model invocation (summarization)
-          "bedrock:RetrieveAndGenerate", # For Bedrock Agents RAG
-          "bedrock:Retrieve"             # For Bedrock Agents RAG
-          # Add specific agent/knowledge base ARN permissions if needed for more granularity
+          "bedrock:InvokeModel", # For direct summarization
         ]
         Effect   = "Allow"
-        Resource = "*" # Scope down if possible, e.g., specific model ARNs
+        # Limit to specific models if possible
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0", # Example Haiku
+           var.embedding_model_arn # For potential embedding generation in backend
+        ]
       },
       {
+        Sid    = "TextractAccess"
         Action = [
           "textract:DetectDocumentText",
           "textract:AnalyzeDocument"
-          # Add StartDocumentTextDetection, GetDocumentTextDetection etc. if using async API
         ]
         Effect   = "Allow"
         Resource = "*" # Scope down if necessary
+      },
+      { # Add Bedrock Knowledge Base Access
+        Sid    = "BedrockKBAccess"
+        Action = [
+          "bedrock:Retrieve",
+          "bedrock:RetrieveAndGenerate"
+        ]
+        Effect   = "Allow"
+        # Resource should be the ARN of the Knowledge Base created in bedrock.tf
+        # Using a wildcard for now, refine later if needed.
+        # Consider using depends_on if referencing awscc_bedrock_knowledge_base.main.arn directly
+        Resource = ["*"] # Example: "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${awscc_bedrock_knowledge_base.main.id}"
       }
-      # Add permissions for DynamoDB/OpenSearch if used for recommendations/KB metadata
+      # Add permissions for DynamoDB/OpenSearch if used directly by backend
     ]
   })
 
@@ -106,10 +119,80 @@ resource "aws_iam_policy" "ecs_task_policy" {
       Name = "${local.project_name}-ecs-task-policy"
     }
   )
+
+  # Ensure this depends on the knowledge base if referencing its ARN directly
+  # depends_on = [
+  #   awscc_bedrock_knowledge_base.main
+  # ]
 }
 
 # Attach the custom policy to the ECS task role
 resource "aws_iam_role_policy_attachment" "ecs_task_policy_attachment" {
   role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.ecs_task_policy.arn
+}
+
+# --- IAM Role for Bedrock Knowledge Base --- #
+resource "aws_iam_role" "bedrock_kb_role" {
+  name = "${local.project_name}-bedrock-kb-role-${random_pet.suffix.id}"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "bedrock.amazonaws.com"
+        }
+      }
+    ]
+  })
+  tags = merge(
+    local.tags,
+    { Name = "${local.project_name}-bedrock-kb-role" }
+  )
+}
+
+# --- IAM Policy for Bedrock Knowledge Base --- #
+resource "aws_iam_policy" "bedrock_kb_policy" {
+  name        = "${local.project_name}-bedrock-kb-policy-${random_pet.suffix.id}"
+  description = "Policy for Bedrock Knowledge Base to access S3, OpenSearch, and Embedding model"
+
+  # Bedrock KB Role needs access to the S3 bucket where documents are stored
+  # and the embedding model.
+  # Access to OpenSearch is granted via the Access Policy in opensearch.tf
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "S3Access"
+        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Effect   = "Allow"
+        Resource = [
+          aws_s3_bucket.documents.arn,
+          "${aws_s3_bucket.documents.arn}/*"
+        ]
+      },
+      {
+        Sid      = "EmbeddingModelAccess"
+        Action   = ["bedrock:InvokeModel"]
+        Effect   = "Allow"
+        # Use the variable defined in bedrock.tf (or create a new one)
+        Resource = [var.embedding_model_arn]
+      }
+      # OpenSearch access is handled by the Access Policy resource (awscc_opensearchserverless_access_policy)
+      # It's generally better to manage AOSS data plane access via its own policies.
+      # If direct IAM permissions are needed for specific AOSS control plane actions, add them here.
+    ]
+  })
+  tags = merge(
+    local.tags,
+    { Name = "${local.project_name}-bedrock-kb-policy" }
+  )
+}
+
+# Attach the policy to the Bedrock KB role
+resource "aws_iam_role_policy_attachment" "bedrock_kb_policy_attachment" {
+  role       = aws_iam_role.bedrock_kb_role.name
+  policy_arn = aws_iam_policy.bedrock_kb_policy.arn
 } 
