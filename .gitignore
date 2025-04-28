@@ -61,6 +61,9 @@ terraform.rc
 crash.log
 crash.*.log
 .terraform.lock.hcl
+# Terraform state files
+*.tfstate
+*.tfstate.*
 
 # Project specific ignores
 progress.md 

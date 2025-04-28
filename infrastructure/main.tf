@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 5.49"
     }
     awscc = {
       source  = "hashicorp/awscc"
@@ -11,6 +11,10 @@ terraform {
     random = {
       source  = "hashicorp/random"
       version = "~> 3.1"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
     }
   }
 
@@ -25,6 +29,12 @@ provider "aws" {
 provider "awscc" {
   region  = var.aws_region
   profile = var.aws_profile
+}
+
+provider "time" {}
+
+resource "time_sleep" "wait_for_aoss_policy" {
+  create_duration = "30s" # Wait for 30 seconds after the AOSS data access policy
 }
 
 # --- Resource definitions will go here --- #

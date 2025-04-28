@@ -1,6 +1,7 @@
 # --- S3 Bucket for Document Uploads & Knowledge Base --- #
 resource "aws_s3_bucket" "documents" {
-  bucket = "${local.project_name}-documents-${random_pet.suffix.id}" # Ensure globally unique bucket name
+  # Add another random suffix to increase uniqueness likelihood
+  bucket = "${local.project_name}-docs-${random_pet.suffix.id}-${random_string.suffix.result}" 
 
   tags = merge(
     local.tags,
@@ -26,6 +27,13 @@ resource "aws_s3_bucket_versioning" "documents_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# Define a random string resource for the suffix
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # Optional: Bucket lifecycle configuration (e.g., move old files to Glacier)

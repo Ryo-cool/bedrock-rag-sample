@@ -97,6 +97,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Effect   = "Allow"
         Resource = "*" # Scope down if necessary
       },
+      /* # コメントアウト開始
       { # Add Bedrock Knowledge Base Access
         Sid    = "BedrockKBAccess"
         Action = [
@@ -109,7 +110,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
         # Consider using depends_on if referencing awscc_bedrock_knowledge_base.main.arn directly
         Resource = ["*"] # Example: "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${awscc_bedrock_knowledge_base.main.id}"
       }
-      # Add permissions for DynamoDB/OpenSearch if used directly by backend
+      */ # コメントアウト終了
     ]
   })
 
@@ -160,7 +161,6 @@ resource "aws_iam_policy" "bedrock_kb_policy" {
 
   # Bedrock KB Role needs access to the S3 bucket where documents are stored
   # and the embedding model.
-  # Access to OpenSearch is granted via the Access Policy in opensearch.tf
   policy = jsonencode({
     Version   = "2012-10-17"
     Statement = [
@@ -179,10 +179,7 @@ resource "aws_iam_policy" "bedrock_kb_policy" {
         Effect   = "Allow"
         # Use the variable defined in bedrock.tf (or create a new one)
         Resource = [var.embedding_model_arn]
-      }
-      # OpenSearch access is handled by the Access Policy resource (awscc_opensearchserverless_access_policy)
-      # It's generally better to manage AOSS data plane access via its own policies.
-      # If direct IAM permissions are needed for specific AOSS control plane actions, add them here.
+      },
     ]
   })
   tags = merge(
