@@ -45,4 +45,50 @@ resource "aws_bedrockagent_knowledge_base" "main" {
     time_sleep.wait_for_aoss_policy # Add dependency on the sleep resource
   ]
 }
-*/ # コメントアウト終了 
+*/ # コメントアウト終了
+
+# Aurora + pgvector を使用した Knowledge Base
+resource "aws_bedrockagent_knowledge_base" "main" {
+  name        = "${local.project_name}-kb-${random_pet.suffix.id}"
+  description = "Knowledge Base for the Bedrock RAG Sample application with Aurora PostgreSQL + pgvector"
+  role_arn    = aws_iam_role.bedrock_kb_role.arn
+
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = var.embedding_model_arn
+    }
+  }
+
+  storage_configuration {
+    type = "RDS"
+    rds_configuration {
+      resource_arn        = aws_rds_cluster.aurora.arn
+      credentials_secret_arn = aws_secretsmanager_secret.aurora_credentials.arn
+      database_name       = aws_rds_cluster.aurora.database_name
+      table_name          = "knowledge_chunks"
+      vector_field        = "embedding"
+      text_field          = "text"
+      metadata_field      = "metadata"
+      # 必要に応じて primary_key_field も指定可能
+      field_mapping = {
+        primary_key_field = "id"
+      }
+    }
+  }
+
+  tags = merge(
+    local.tags,
+    {
+      Name = "${local.project_name}-kb-aurora-pgvector"
+    }
+  )
+
+  # Auroraクラスターが完全に準備できていることを確認するため
+  depends_on = [
+    aws_iam_role.bedrock_kb_role,
+    aws_rds_cluster.aurora,
+    aws_rds_cluster_instance.aurora_instances,
+    aws_secretsmanager_secret_version.aurora_credentials
+  ]
+} 

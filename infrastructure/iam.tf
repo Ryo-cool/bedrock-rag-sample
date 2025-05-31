@@ -97,7 +97,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Effect   = "Allow"
         Resource = "*" # Scope down if necessary
       },
-      /* # コメントアウト開始
+      /* コメントアウト解除 - Knowledge Base Access */
       { # Add Bedrock Knowledge Base Access
         Sid    = "BedrockKBAccess"
         Action = [
@@ -106,11 +106,23 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Effect   = "Allow"
         # Resource should be the ARN of the Knowledge Base created in bedrock.tf
-        # Using a wildcard for now, refine later if needed.
-        # Consider using depends_on if referencing awscc_bedrock_knowledge_base.main.arn directly
-        Resource = ["*"] # Example: "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${awscc_bedrock_knowledge_base.main.id}"
+        Resource = [aws_bedrockagent_knowledge_base.main.arn]
+      },
+      {
+        Sid    = "AuroraAccessFromECS"
+        Action = [
+          "rds-data:ExecuteStatement",
+          "rds-data:BatchExecuteStatement"
+        ]
+        Effect   = "Allow"
+        Resource = [aws_rds_cluster.aurora.arn]
+      },
+      {
+        Sid    = "SecretsManagerAccessFromECS"
+        Action = ["secretsmanager:GetSecretValue"]
+        Effect   = "Allow"
+        Resource = [aws_secretsmanager_secret.aurora_credentials.arn]
       }
-      */ # コメントアウト終了
     ]
   })
 
@@ -121,10 +133,9 @@ resource "aws_iam_policy" "ecs_task_policy" {
     }
   )
 
-  # Ensure this depends on the knowledge base if referencing its ARN directly
-  # depends_on = [
-  #   awscc_bedrock_knowledge_base.main
-  # ]
+  depends_on = [
+    aws_bedrockagent_knowledge_base.main
+  ]
 }
 
 # Attach the custom policy to the ECS task role
@@ -157,7 +168,7 @@ resource "aws_iam_role" "bedrock_kb_role" {
 # --- IAM Policy for Bedrock Knowledge Base --- #
 resource "aws_iam_policy" "bedrock_kb_policy" {
   name        = "${local.project_name}-bedrock-kb-policy-${random_pet.suffix.id}"
-  description = "Policy for Bedrock Knowledge Base to access S3, OpenSearch, and Embedding model"
+  description = "Policy for Bedrock Knowledge Base to access S3, RDS Aurora, and Embedding model"
 
   # Bedrock KB Role needs access to the S3 bucket where documents are stored
   # and the embedding model.
@@ -180,6 +191,22 @@ resource "aws_iam_policy" "bedrock_kb_policy" {
         # Use the variable defined in bedrock.tf (or create a new one)
         Resource = [var.embedding_model_arn]
       },
+      {
+        Sid      = "AuroraAccess"
+        Action   = [
+          "rds-data:ExecuteStatement",
+          "rds-data:BatchExecuteStatement",
+          "rds:DescribeDBClusters"
+        ]
+        Effect   = "Allow"
+        Resource = [aws_rds_cluster.aurora.arn]
+      },
+      {
+        Sid      = "SecretsManagerAccess"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Effect   = "Allow"
+        Resource = [aws_secretsmanager_secret.aurora_credentials.arn]
+      }
     ]
   })
   tags = merge(
